@@ -37,7 +37,7 @@ else:
 
 templateHelper = helpers.template_helper.templateHelper(
   '../templates/templates.csv',
-  'beamformed_corr_thresholds.csv',
+  'background_correlations.csv',
   upsampling_factor,
   filter_band,
   True
