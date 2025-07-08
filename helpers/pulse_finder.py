@@ -3,7 +3,7 @@ import scipy.signal
 import NuRadioReco.utilities.signal_processing
 import matplotlib.pyplot as plt
 import helpers.pulse_counter
-
+import os
 class pulseFinder:
   def __init__(
       self,
@@ -33,8 +33,9 @@ class pulseFinder:
     self.__beamformed_waveforms = np.zeros(1)
     self.__times = np.zeros(1)
     self.__frequencies = np.zeros(1)
+    pueo_util_install_dir = os.environ['PUEO_UTIL_INSTALL_DIR']
     amp_data = np.genfromtxt(
-      '/home/welling/Software/pueo/usr/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv',
+      '{}/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv'.format(pueo_util_install_dir),
       delimiter=','
     )
     self.__amp_response =  np.exp(-1.j*amp_data[:, 2])
