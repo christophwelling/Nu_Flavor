@@ -19,9 +19,9 @@ parser.add_argument("run", type=int)
 args = parser.parse_args()
 
 upsampling_factor = 10.
-n_events = 200
+n_events = 1500
 n_samples = int(1024*upsampling_factor)
-beamforming_degrees = 40.
+beamforming_degrees = 50.
 antPosFile = '/home/welling/Software/pueo/usr/share/pueo/geometry/jun25/qrh.dat'
 filter_band = [.2, 1.]
 # filter_band = None
@@ -39,7 +39,7 @@ templateHelper = helpers.template_helper.templateHelper(
 dataReader = helpers.data_reader.DataReader(
   data_file,
   antPosFile,
-  upsampling_factor,
+  1,
   filter_band
 )
 
@@ -84,7 +84,36 @@ for i_event in range(min(n_events, dataReader.get_n_events())):
         beams[i_pol],
         template,
         'full'
-      )[:template.shape[0]-1]))
+      )[template.shape[0]-1:]))
       max_correlations[i_pol, i_template, i_event] = np.max(correlations[i_pol])
 
+n_bins = 50
+bins = np.linspace(np.min(max_correlations), np.max(max_correlations),  n_bins)
+n_templates = templateHelper.get_n_templates()
+background_output = np.zeros((n_templates+1, n_bins-1))
 fig1 = plt.figure(figsize=(12, 8))
+for i_template in range(n_templates):
+  ax1_1 = fig1.add_subplot(n_templates, 2, i_template*2+1)
+  ax1_2 = fig1.add_subplot(n_templates, 2, i_template*2+2)
+  ax1_1.hist(
+    max_correlations[:, i_template, :].flatten(),
+    bins=bins
+  )
+  entries, bin_edges, patches = ax1_2.hist(
+    max_correlations[:, i_template, :].flatten(),
+    density=True,
+    cumulative=-1,
+    bins=bins
+  )
+  background_output[0] = bin_edges[:-1] + .5 * (bin_edges[1] - bin_edges[0])
+  background_output[i_template+1] = entries
+  ax1_2.set_yscale('log')
+  ax1_1.grid()
+  ax1_2.grid()
+fig1.tight_layout()
+fig1.savefig('plots/background.png')
+np.savetxt(
+  'background_correlations.csv',
+  background_output,
+  delimiter=', '
+)

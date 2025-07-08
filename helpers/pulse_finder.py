@@ -2,6 +2,7 @@ import numpy as np
 import scipy.signal
 import NuRadioReco.utilities.signal_processing
 import matplotlib.pyplot as plt
+import helpers.pulse_counter
 
 class pulseFinder:
   def __init__(
@@ -19,11 +20,11 @@ class pulseFinder:
     )
     raddeg = np.pi / 180.
     self.__antenna_positions = antenna_data[:, 2:5]
-    # self.__antenna_positions -= .3 * np.array([
-    #   np.cos(antenna_data[:, 6]*raddeg) * np.cos(antenna_data[:, 5]*raddeg),
-    #   np.sin(antenna_data[:, 6]*raddeg) * np.cos(antenna_data[:, 5]*raddeg),
-    #   np.sin(antenna_data[:, 5] * raddeg)
-    # ]).T
+    self.__antenna_positions -= .3 * np.array([
+      np.cos(antenna_data[:, 6]*raddeg) * np.cos(antenna_data[:, 5]*raddeg),
+      np.sin(antenna_data[:, 6]*raddeg) * np.cos(antenna_data[:, 5]*raddeg),
+      np.sin(antenna_data[:, 5] * raddeg)
+    ]).T
     self.__upsampling_factor = int(upsampling_factor)
     self.__sampling_rate = 3. * self.__upsampling_factor
     self.__filter_band = filter_band
@@ -47,6 +48,9 @@ class pulseFinder:
     self.__correlation_quantiles = np.genfromtxt(
       quantile_data,
       delimiter=','
+    )
+    self.__pulse_counter = helpers.pulse_counter.pulseCounter(
+      int(5 * upsampling_factor)
     )
 
 
@@ -95,7 +99,6 @@ class pulseFinder:
       for i_pol in range(2):
         if dedispersed:
           beams[i_pol] += np.roll(self.__dedispersed_waveforms[i_pol, i_channel], sample_offset)
-        
         else:
           beams[i_pol] += np.roll(self.__waveforms[i_pol, i_channel], sample_offset)
     beams /= self.__channel_indices.shape[0]
@@ -126,16 +129,28 @@ class pulseFinder:
     template, threshold, i_template = self.__template_helper.pick_template(
       waveforms[pol_guess]
     )
-    self.__correlations = np.zeros((2, waveforms.shape[1]))
+    self.__correlations = np.zeros((2, waveforms.shape[1] + template.shape[0]-1))
     self.__probabilities = np.zeros_like(self.__correlations)
     for i_pol in range(2):
       self.__correlations[i_pol] = np.abs(scipy.signal.hilbert(np.correlate(
         waveforms[i_pol],
         template,
         'full'
-      )[template.shape[0]-1:]))
+      )))
       for ii in range(self.__correlations.shape[1]):
         self.__probabilities[i_pol, ii] = self.__correlation_quantiles[i_template+1, np.argmin(
           np.abs(self.__correlations[i_pol, ii]-self.__correlation_quantiles[0])
           )]
     return self.__correlations, self.__probabilities
+  
+  def get_pulses(
+      self,
+      correlations,
+      probability,
+      thresholds
+  ):
+    return self.__pulse_counter.count_pulses(
+      correlations,
+      probability,
+      thresholds
+    )

@@ -39,6 +39,7 @@ class DataReader:
     self.__position_weight = 0.
     self.__trigger_times = []
     self.__trace_start_time = 0
+    self.__neutrino_energy = 0
 
   def get_n_events(
       self
@@ -53,6 +54,7 @@ class DataReader:
     detEvt = getattr(self.__data_file.passTree, 'detectorEvents')[0]
     eventSummary = getattr(self.__data_file.passTree, 'eventSummary')
     self.__absorption_weight = eventSummary.neutrino.path.getWeight()
+    self.__neutrino_energy = eventSummary.neutrino.energy.eV
     self.__direction_weight = eventSummary.loop.directionWeight
     self.__position_weight = eventSummary.loop.positionWeight
     
@@ -251,3 +253,6 @@ class DataReader:
       self
   ):
     return self.__trigger_times
+  
+  def get_neutrino_energy(self):
+    return self.__neutrino_energy
