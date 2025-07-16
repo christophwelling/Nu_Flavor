@@ -107,6 +107,7 @@ class DataReader:
     self.__energies = np.array(energies)
     self.__secondaries = np.array(secondaries)
     self.__had_fracs = np.array(had_fracs)
+    self.__int_dists = np.array(interaction_dists)
     
     if detEvt.RFdir_payload.size() > 0:
       self.__signal_direction[:] = detEvt.RFdir_payload[0]
@@ -324,3 +325,8 @@ class DataReader:
       self
   ):
     return self.__had_fracs
+    
+  def get_int_dists(
+      self
+  ):
+    return self.__int_dists
