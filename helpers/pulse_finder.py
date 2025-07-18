@@ -38,18 +38,22 @@ class pulseFinder:
       '{}/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv'.format(pueo_util_install_dir),
       delimiter=','
     )
-    self.__amp_response =  np.exp(-1.j*amp_data[:, 2])
+    self.__amp_response =  amp_data[:, 1] * np.exp(-1.j*amp_data[:, 2])
     self.__amp_response = np.fft.irfft(self.__amp_response)
     self.__amp_response = scipy.signal.resample(self.__amp_response, 1024 * self.__upsampling_factor)
     self.__amp_response = np.fft.rfft(self.__amp_response)
+    self.__amp_response = np.exp(1.j * np.angle(self.__amp_response))
     self.__dedispersed_waveforms = np.zeros(1)
     self.__template_helper = template_helper
     self.__correlations = np.zeros(1)
     self.__probabilities = np.zeros(1)
-    self.__correlation_quantiles = np.genfromtxt(
-      quantile_data,
-      delimiter=','
-    )
+    if quantile_data is not None:
+      self.__correlation_quantiles = np.genfromtxt(
+        quantile_data,
+        delimiter=','
+      )
+    else:
+      self.__correlation_quantiles = None
     self.__pulse_counter = helpers.pulse_counter.pulseCounter(
       int(5 * upsampling_factor)
     )
@@ -133,16 +137,16 @@ class pulseFinder:
     self.__correlations = np.zeros((2, waveforms.shape[1] + template.shape[0]-1))
     self.__probabilities = np.zeros_like(self.__correlations)
     for i_pol in range(2):
-      self.__correlations[i_pol] = np.abs(scipy.signal.hilbert(np.correlate(
+      self.__correlations[i_pol] = (np.correlate(
         waveforms[i_pol],
         template,
         'full'
-      )))
-      for ii in range(self.__correlations.shape[1]):
-        self.__probabilities[i_pol, ii] = self.__correlation_quantiles[i_template+1, np.argmin(
-          np.abs(self.__correlations[i_pol, ii]-self.__correlation_quantiles[0])
-          )]
-    return self.__correlations, self.__probabilities
+      ))
+    for ii in range(self.__correlations.shape[1]):
+      self.__probabilities[:, ii] = self.__correlation_quantiles[i_template+1, np.argmin(
+        np.abs(self.__correlations[0, ii]**2 + self.__correlations[1, ii]**2-self.__correlation_quantiles[0])
+        )]
+    return self.__correlations, self.__probabilities, i_template
   
   def get_pulses(
       self,

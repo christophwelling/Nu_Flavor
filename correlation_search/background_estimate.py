@@ -15,23 +15,23 @@ import glob
 import os.path
 
 parser = argparse.ArgumentParser()
+parser.add_argument("path", type=str)
 parser.add_argument("run", type=int)
 args = parser.parse_args()
 
 upsampling_factor = 10.
-n_events = 1500
+n_events = 3000
 n_samples = int(1024*upsampling_factor)
-beamforming_degrees = 50.
+beamforming_degrees = 70.
 antPosFile = '/home/welling/Software/pueo/usr/share/pueo/geometry/jun25/qrh.dat'
 filter_band = [.2, 1.]
 # filter_band = None
 folders = []
 rf_dir = np.array([1, 0, 0])
-data_dir = '/home/welling/RadioNeutrino/data/pueo/flavor/noise/'
-data_file = data_dir+'run'+str(args.run)+'/IceFinal_'+str(args.run)+'_allTree.root'
+data_file = args.path +'/run'+str(args.run)+'/IceFinal_'+str(args.run)+'_allTree.root'
 templateHelper = helpers.template_helper.templateHelper(
   '../templates/templates.csv',
-  'beamformed_corr_thresholds.csv',
+  None,
   upsampling_factor,
   filter_band,
   True
@@ -49,9 +49,10 @@ pulseFinder = helpers.pulse_finder.pulseFinder(
   upsampling_factor,
   filter_band,
   templateHelper,
-  'max_corr_beamformed.csv'
+  None
 )
 max_correlations = np.zeros((2, templateHelper.get_n_templates(), min(n_events, dataReader.get_n_events())))
+noise_rms = np.zeros(min(n_events, dataReader.get_n_events()))
 for i_event in range(min(n_events, dataReader.get_n_events())):
   dataReader.read_event(i_event)
   channel_ids = dataReader.get_close_channels(
@@ -66,6 +67,7 @@ for i_event in range(min(n_events, dataReader.get_n_events())):
         i_pol,
         False
       )
+  noise_rms[i_event] = np.sqrt(np.mean(wf[0, 0]**2))
   pulseFinder.set_waveforms(
     wf,
     channel_ids
@@ -115,5 +117,10 @@ fig1.savefig('plots/background.png')
 np.savetxt(
   'background_correlations.csv',
   background_output,
+  delimiter=', '
+)
+np.savetxt(
+  'noise_rms.csv',
+  noise_rms,
   delimiter=', '
 )
