@@ -16,6 +16,18 @@ class AntennaHelper:
     self.__off_axis_responses[1, 0] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_vv_az.csv')
     self.__off_axis_responses[1, 1] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_vv_el.csv')
 
+    position_data = np.genfromtxt(
+      os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/geometry/jun25/qrh.dat',
+      delimiter=',',
+      skip_header=2
+    )
+    self.__antenna_positions = position_data[:, 2:5]
+    self.__antenna_boresights = np.zeros_like(self.__antenna_positions)
+    degrad = np.pi / 180.
+    self.__antenna_boresights[:, 0] = np.cos(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
+    self.__antenna_boresights[:, 1] = np.sin(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
+    self.__antenna_boresights[:, 2] = np.sin(position_data[:, 5]*degrad)
+
   def __read_boresight_response(
       self,
       filename: str
@@ -81,3 +93,28 @@ class AntennaHelper:
       elevation,
       polarization
     )
+  
+  def get_antenna_response_for_antenna(
+      self,
+      signal_direction: np.array,
+      antenna_index: int,
+      polarization: int, #0: hpol, 1: vpol
+      signal_travel_time: False # If true, the time shift due to the signal travel time is included in the antenna response
+  ):
+    response = self.get_antenna_response_for_direction(
+      signal_direction,
+      self.__antenna_boresights[antenna_index],
+      polarization
+    )
+    if signal_travel_time:
+      dt = np.dot(signal_direction, self.__antenna_positions[antenna_index]) / 3.e8
+      freqs = np.fft.rfftfreq(1024, 1./3.e9)
+      return response * np.exp(-2.j * np.pi * dt * freqs)
+    else:
+      return response
+    
+  def get_antenna_positions(self):
+    return np.copy(self.__antenna_positions)
+  
+  def get_antenna_boresights(self):
+    return np.copy(self.__antenna_boresights)
