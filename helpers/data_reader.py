@@ -5,12 +5,14 @@ import scipy.signal
 import radiotools.helper
 import scipy.fft
 import NuRadioReco.utilities.signal_processing
+import os
 
-cl = 299792458
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libNiceMC.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libAntarcticaRoot.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libpueoEvent.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libPueoSim.so")
+# cl = 299792458
+cl = 3.e8
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR']+"/lib/libNiceMC.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR']+"/lib/libAntarcticaRoot.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR']+"/lib/libpueoEvent.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR']+"/lib/libPueoSim.so")
 
 class DataReader:
   def __init__(
@@ -20,11 +22,11 @@ class DataReader:
       upsampling_factor=1,
       filter_band=None
   ):
-    self.__antenna_positions = np.genfromtxt(
-      antenna_pos_file,
-      skip_header=2,
-      delimiter=','
-    )[:, 2:5]
+    # self.__antenna_positions = np.genfromtxt(
+    #   antenna_pos_file,
+    #   skip_header=2,
+    #   delimiter=','
+    # )[:, 2:5]
     self.__upsampling_factor = int(upsampling_factor)
     self.__sampling_rate = 3. * self.__upsampling_factor
     self.__data_file = ROOT.TFile.Open(filename)
