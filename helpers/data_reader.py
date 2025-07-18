@@ -40,6 +40,7 @@ class DataReader:
     self.__position_weight = 0.
     self.__trigger_times = []
     self.__trace_start_time = 0
+    self.__nu_energy = 0
 
   def get_n_events(
       self
@@ -78,7 +79,7 @@ class DataReader:
     self.__absorption_weight = eventSummary.neutrino.path.getWeight()
     self.__direction_weight = eventSummary.loop.directionWeight
     self.__position_weight = eventSummary.loop.positionWeight
-    
+    self.__nu_energy = eventSummary.neutrino.energy.eV
     self.__num_interactions = len(eventSummary.shower)
     times = []
     energies = []
@@ -332,3 +333,5 @@ class DataReader:
       self
   ):
     return self.__int_dists
+  def get_neutrino_energy(self):
+    return self.__nu_energy

@@ -18,7 +18,8 @@ for folder in folder_content:
     None
   )
   make_plots = False
-  trig_list = []
+  dataReader.read_event(0)
+  trig_list = [dataReader.get_neutrino_energy()]
   run_id = folder.split('/')[-1][3:]
   print(run_id)
   for i_event in range(dataReader.get_n_events()):
