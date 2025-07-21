@@ -5,12 +5,13 @@ import scipy.signal
 import radiotools.helper
 import scipy.fft
 import NuRadioReco.utilities.signal_processing
+import os
 
-cl = 299792458
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libNiceMC.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libAntarcticaRoot.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libpueoEvent.so")
-ROOT.gSystem.Load("/home/austin/pueo_build/install/lib/libPueoSim.so")
+cl = 3.e8
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libNiceMC.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libAntarcticaRoot.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libpueoEvent.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libPueoSim.so")
 
 class DataReader:
   def __init__(
@@ -38,6 +39,9 @@ class DataReader:
     self.__position_weight = 0.
     self.__trigger_times = []
     self.__trace_start_time = 0
+    self.__neutrino_energy = 0
+    self.__polarization_angle = 0
+    self.__viewing_angle = 0
 
   def get_n_events(
       self
@@ -74,6 +78,7 @@ class DataReader:
     detEvt = getattr(self.__data_file.passTree, 'detectorEvents')[0]
     eventSummary = getattr(self.__data_file.passTree, 'eventSummary')
     self.__absorption_weight = eventSummary.neutrino.path.getWeight()
+    self.__neutrino_energy = eventSummary.neutrino.energy.eV
     self.__direction_weight = eventSummary.loop.directionWeight
     self.__position_weight = eventSummary.loop.positionWeight
     
@@ -111,9 +116,17 @@ class DataReader:
     
     if detEvt.RFdir_payload.size() > 0:
       self.__signal_direction[:] = detEvt.RFdir_payload[0]
+      dir_global = np.array(detEvt.RFdir[0])
+      dir_x = np.cross(dir_global, np.array([0, 0, 1]))
+      dir_x /= np.linalg.norm(dir_x)
+      dir_z = np.cross(dir_global, dir_x)
+      pol = np.array(detEvt.polarizationAtDetector)
+      self.__polarization_angle = -np.arctan2(np.dot(pol, dir_x), np.dot(pol, dir_z))
+      self.__viewing_angle = detEvt.viewAngle[0]
+
     else:
       self.__signal_direction = np.zeros(3)
-      
+      self.__polarization_angle = 0
     n_samples = np.array(detEvt.waveformsV[0].GetY()).shape[0] * self.__upsampling_factor
     self.__trace_start_time = detEvt.waveformsV[0].GetPointX(0) * 1.e9
     self.__trigger_times = np.array(detEvt.triggerTimes)*1.e9
@@ -234,7 +247,6 @@ class DataReader:
     for i_channel, channel_id in enumerate(channel_ids):
       waveforms[i_channel] = self.__waveforms[polarization, channel_id]
       if roll:
-        print('!!', roll)
         delta_t = np.dot(
           self.__antenna_positions[ref_channel] - self.__antenna_positions[channel_id],
           rf_dir
@@ -330,3 +342,12 @@ class DataReader:
       self
   ):
     return self.__int_dists
+  
+  def get_neutrino_energy(self):
+    return self.__neutrino_energy
+  
+  def get_polarization_angle(self):
+    return self.__polarization_angle
+
+  def get_viewing_angle(self):
+    return self.__viewing_angle

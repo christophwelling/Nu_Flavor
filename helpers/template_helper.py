@@ -8,7 +8,7 @@ class templateHelper:
   def __init__(
       self,
       filename,
-      threshold_file,
+      background_file,
       upsampling_factor,
       filter_band=None,
       plot_templates=False
@@ -17,15 +17,15 @@ class templateHelper:
       filename,
       delimiter=','
     )
-    if threshold_file is not None:
-      self.__threshold_data = np.genfromtxt(
-        threshold_file,
+    if background_file is not None:
+      self.__background_data = np.genfromtxt(
+        background_file,
         delimiter=','
       )
-      if self.__threshold_data.ndim == 1:
-        self.__threshold_data = np.reshape(self.__threshold_data, (self.__threshold_data.shape[0], 1))
+      if self.__background_data.ndim == 1:
+        self.__background_data = np.reshape(self.__background_data, (self.__background_data.shape[0], 1))
     else:
-      self.__threshold_data = np.ones((self.__data.shape[0], 1))
+      self.__background_data = np.ones((self.__data.shape[0], 1))
     self.__templates = np.zeros((self.__data.shape[0], int(self.__data.shape[1] * upsampling_factor)))
     self.__upsampling_factor = upsampling_factor
     self.__sampling_rate = 3. * self.__upsampling_factor
@@ -48,13 +48,20 @@ class templateHelper:
         )
     if plot_templates:
       fig1 = plt.figure(figsize=(8, 6))
-      ax1_1 = fig1.add_subplot(111)
+      ax1_1 = fig1.add_subplot(211)
+      ax1_2 = fig1.add_subplot(212)
+      freqs = np.fft.rfftfreq(self.__templates.shape[1], 1./self.__sampling_rate)
       for i_tmp in range(self.__templates.shape[0]):
         ax1_1.plot(
           np.arange(self.__templates.shape[1]) / 3. / self.__upsampling_factor,
           self.__templates[i_tmp]
         )
+        ax1_2.plot(
+          freqs,
+          np.abs(np.fft.rfft(self.__templates[i_tmp]))
+        )
       ax1_1.grid()
+      ax1_2.grid()
       fig1.tight_layout()
       fig1.savefig('templates.png')
 
@@ -68,13 +75,18 @@ class templateHelper:
       self,
       waveform
   ):
-    tmp_corrs = np.zeros(self.__templates.shape[0])
+    tmp_corr_relative = np.zeros(self.__templates.shape[0])
     for ii in range(self.__templates.shape[0]):
-      tmp_corrs = np.max(np.abs(scipy.signal.correlate(
+      corr_threshold = self.__background_data[0, np.argmin(np.abs(.1 - self.__background_data[ii+1]))]
+      tmp_max_corr = np.max(np.abs(scipy.signal.correlate(
         waveform,
         self.__templates[ii]
-      ))) / self.__threshold_data[ii, -1]
-    return self.__templates[np.argmax(tmp_corrs)], self.__threshold_data[np.argmax(tmp_corrs)], np.argmax(tmp_corrs)
+      )))
+      tmp_corr_relative[ii] = tmp_max_corr / corr_threshold
+
+
+    i_template = np.argmax(tmp_corr_relative)
+    return self.__templates[i_template], self.__background_data[i_template], i_template
 
   def get_template_size(
       self
