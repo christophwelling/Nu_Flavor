@@ -18,14 +18,16 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("path", type=str)
 parser.add_argument("--run", type=int, default=-1)
+parser.add_argument("--force", type=int, default=0)
 args = parser.parse_args()
 
-upsampling_factor = 10.
+upsampling_factor = 1.
 n_samples = int(1024*upsampling_factor)
 beamforming_degrees = 50.
 antPosFile = os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/geometry/jun25/qrh.dat'
 filter_band = [.2, 1.]
-probability_thresholds = np.array([.05, 1.e-2, 1.e-3])
+probability_thresholds = np.array([.05, 1.e-2, 1.e-3]) / 1024.
+#probability_thresholds = np.array([.05, 1.e-2, 1.e-3])
 # filter_band = None
 folders = []
 if args.run < 0:
@@ -34,10 +36,11 @@ else:
   folders = [args.path + '/run{}'.format(args.run)]
   if not os.path.exists(folders[0]):
     raise RuntimeError("Path {} does not exist!".format(folders[0]))
-
+quantile_data_file =   '../background_distribution/noise_probabilities_2d.csv'
+# quantile_data_file =   'background_correlations.csv'
 templateHelper = helpers.template_helper.templateHelper(
   '../templates/templates.csv',
-  'background_correlations.csv',
+  quantile_data_file,
   upsampling_factor,
   filter_band,
   True
@@ -48,21 +51,27 @@ pulseFinder = helpers.pulse_finder.pulseFinder(
   upsampling_factor,
   filter_band,
   templateHelper,
-  'background_correlations.csv'
+  quantile_data_file
 )
-
+noise_rms_data = np.genfromtxt(
+  'noise_rms.csv',
+  delimiter=','
+)
+noise_rms = np.mean(noise_rms_data)
 for i_file, folder_name in enumerate(folders):
   run_id = int(folder_name.split('/')[-1][3:])
   filename = folder_name + '/IceFinal_{}_allTree.root'.format(run_id)
   output_filename = 'pulse_search_results_{}.json'.format(run_id)
-  if os.path.exists(output_filename):
+  if os.path.exists(output_filename) and args.force == 0:
+    print('Output file for {} already exists and is being skipped.'.format(folder_name))
     continue
+
   print(i_file, folder_name)
   dataReader = helpers.data_reader.DataReader(
     filename,
     antPosFile,
     1,
-    None
+    filter_band
   )
   output = {'events': []}
   for i_event in range(dataReader.get_n_events()):
@@ -153,7 +162,7 @@ for i_file, folder_name in enumerate(folders):
         max_channel[0],
         True
       )
-      correlations, probabilities = pulseFinder.correlate(
+      correlations, probabilities, i_template = pulseFinder.correlate(
         dedispersed_beams,
         max_channel[1]
       )
@@ -164,7 +173,7 @@ for i_file, folder_name in enumerate(folders):
       )
       tt = pulseFinder.get_times()
       plt.close('all')
-      fig1, axes1 = plt.subplots(5, 2, figsize=(24, 8)) 
+      fig1, axes1 = plt.subplots(5, 2, figsize=(24, 12)) 
       # fig2, axes2 = plt.subplots(4, 1, figsize=(12, 12)) 
       for i_pol in range(2):
         axes1[0, i_pol].plot(
@@ -172,6 +181,10 @@ for i_file, folder_name in enumerate(folders):
           wf_max[i_pol],
           color='C0'
         )
+        axes1[0, i_pol].set_ylim([-2.5*noise_rms, 2.5*noise_rms])
+        for i in [1, 2, 3]:
+          axes1[0, i_pol].axhline(i * noise_rms, linestyle='--', color='k', alpha=.3)
+          axes1[0, i_pol].axhline(-i * noise_rms, linestyle='--', color='k', alpha=.3)
         axes1[0, i_pol].plot(
           times - start_time,
           wf_nl[i_pol],
@@ -210,8 +223,14 @@ for i_file, folder_name in enumerate(folders):
         axes1[2, i_pol].grid()
         axes1[3, i_pol].plot(
           tt_correlations,
-          correlations[i_pol]
+          np.abs(correlations[i_pol])**2
         )
+        axes1[3, i_pol].plot(
+          tt_correlations,
+          (correlations[0]**2 + correlations[1]**2),
+          alpha=.5
+        )
+        axes1[3, i_pol].set_title(i_template)
         axes1[3, i_pol].grid()
         axes1[3, i_pol].set_xlim([tt[0], tt[-1]])
         axes1[4,i_pol].plot(
@@ -220,7 +239,8 @@ for i_file, folder_name in enumerate(folders):
         )
         axes1[4, i_pol].grid()
         axes1[4, i_pol].set_yscale('log')
-        axes1[4, i_pol].set_ylim([1.e-4, 2.])
+        axes1[4, i_pol].set_ylim([1.e-8, 2.])
+        # axes1[4, i_pol].set_ylim([1.e-4, 2.])
         axes1[4, i_pol].set_xlim([tt[0], tt[-1]])
         axes1[4, i_pol].set_xlabel('t [ns]')
         axes1[4, i_pol].set_ylabel('probability')
