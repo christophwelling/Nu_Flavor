@@ -8,10 +8,10 @@ import NuRadioReco.utilities.signal_processing
 import os
 
 cl = 3.e8
-ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libNiceMC.so")
-ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libAntarcticaRoot.so")
-ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libpueoEvent.so")
-ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libPueoSim.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libNiceMC.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libAntarcticaRoot.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libpueoEvent.so")
+ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libPueoSim.so")
 
 class DataReader:
   def __init__(
