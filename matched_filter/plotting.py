@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.signal
 
 
 def plot_waveforms(
@@ -36,13 +37,15 @@ def plot_correlation(
     times,
     correlation,
     waveforms,
-    waveforms_noiseless
+    waveforms_noiseless,
+    probabilities,
+    noise_rms
 ):
   plt.close('all')
   max_channel = np.argmax(np.max(np.max(np.abs(waveforms_noiseless), axis=0), axis=1))
   n_sectors = correlation.shape[1]//4
   fig1, ax1 = plt.subplots(8, n_sectors, figsize=(8*n_sectors, 24), sharey=True, sharex=True, num=1, clear=True)
-  fig2, ax2 = plt.subplots(4, 1, figsize=(12, 12), num=2, clear=True)
+  fig2, ax2 = plt.subplots(5, 1, figsize=(12, 12), num=2, clear=True)
   for i_sector in range(n_sectors):
     for i_ring in range(4):
       for i_pol in range(2):
@@ -63,6 +66,17 @@ def plot_correlation(
       waveforms_noiseless[i_pol, max_channel],
       alpha=.5
     )
+    for i in range(1, 3):
+      ax2[i_pol].axhline(
+        i*noise_rms,
+        color='k',
+        linestyle=':'
+      )
+      ax2[i_pol].axhline(
+        -i*noise_rms,
+        color='k',
+        linestyle=':'
+      )
     ax2[i_pol].grid()
   ax2[2].plot(
     times,
@@ -76,9 +90,23 @@ def plot_correlation(
   ax2[2].grid()
   ax2[3].plot(
     times,
-    np.abs(np.sum(np.sum(correlation, axis=0), axis=0))[::-1]
+    np.abs(np.sum(np.sum(correlation, axis=0), axis=0))[::-1],
+    color='C0',
+    alpha=.5
+  )
+  ax2[3].plot(
+    times,
+    np.abs(scipy.signal.hilbert(np.sum(np.sum(correlation, axis=0), axis=0)))[::-1],
+    color='C0'
   )
   ax2[3].grid()
+  ax2[4].plot(
+    times,
+    probabilities[::-1]
+  )
+  ax2[4].grid()
+  ax2[4].set_yscale('log')
+  ax2[4].set_ylim([5.e-4, 1.1])
   fig2.tight_layout()
   fig2.savefig('plots/correlation_sum_{}_{}.png'.format(i_event, i_trigger))
   plt.close('all')

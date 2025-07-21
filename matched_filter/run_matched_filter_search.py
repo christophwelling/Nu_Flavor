@@ -13,13 +13,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('filename', type=str)
 args = parser.parse_args()
 
-antenna_angle_cut = 50. * np.pi / 180.
+antenna_angle_cut = 40. * np.pi / 180.
 
 dataReader = helpers.data_reader.DataReader(
   args.filename,
   None
 )
-mf_helper = matched_filter_helper.MatchedFilterHelper()
+mf_helper = matched_filter_helper.MatchedFilterHelper('~/RadioNeutrino/data/pueo/flavor/noise/run99/IceFinal_99_allTree.root'
+)
 
 
 for i_event in range(dataReader.get_n_events()):
@@ -65,13 +66,21 @@ for i_event in range(dataReader.get_n_events()):
       template,
       wf
     )
+    probs, noise_rms = mf_helper.estimate_background_rate(
+      template,
+      antennas,
+      np.sum(np.sum(corr, axis=0), axis=0),
+      1000
+    )
     plotting.plot_correlation(
       i_event,
       i_trigger,
       times, 
       corr,
       wf,
-      wf_noiseless
+      wf_noiseless,
+      probs,
+      noise_rms
     )
     gc.collect()
 
