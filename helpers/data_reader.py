@@ -1,14 +1,17 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import ROOT
 import scipy.signal
 import radiotools.helper
 import scipy.fft
 import NuRadioReco.utilities.signal_processing
+import os
 
-ROOT.gSystem.Load("/home/welling/Software/pueo/usr/lib/libNiceMC.so")
-ROOT.gSystem.Load("/home/welling/Software/pueo/usr/lib/libAntarcticaRoot.so")
-ROOT.gSystem.Load("/home/welling/Software/pueo/usr/lib/libpueoEvent.so")
-ROOT.gSystem.Load("/home/welling/Software/pueo/usr/lib/libPueoSim.so")
+cl = 3.e8
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libNiceMC.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libAntarcticaRoot.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libpueoEvent.so")
+ROOT.gSystem.Load(os.env['PUEO_UTIL_INSTALL_DIR'] + "/lib/libPueoSim.so")
 
 class DataReader:
   def __init__(
@@ -18,14 +21,11 @@ class DataReader:
       upsampling_factor=1,
       filter_band=None
   ):
-    if antenna_pos_file is not None:
-      self.__antenna_positions = np.genfromtxt(
-        antenna_pos_file,
-        skip_header=2,
-        delimiter=','
-      )[:, 2:5]
-    else:
-      self.__antenna_positions = None
+    self.__antenna_positions = np.genfromtxt(
+      antenna_pos_file,
+      skip_header=2,
+      delimiter=','
+    )[:, 2:5]
     self.__upsampling_factor = int(upsampling_factor)
     self.__sampling_rate = 3. * self.__upsampling_factor
     self.__data_file = ROOT.TFile.Open(filename)
@@ -48,6 +48,28 @@ class DataReader:
   ):
     return self.__data_file.passTree.GetEntries()
 
+  def get_interactions(
+      self, 
+      i_event
+      ):
+      self.__data_file.passTree.GetEntry(i_event)
+      detEvt = getattr(self.__data_file.passTree, 'detectorEvents')[0]
+      eventSummary = getattr(self.__data_file.passTree, 'eventSummary')
+
+      '''
+      for i in range(0, self.__num_interactions):
+          print(eventSummary.shower[i].showerEnergy.eV)
+          print('Is secondary? '+str(eventSummary.shower[i].secondary))
+          print('Num interactions: '+str(eventSummary.shower[i].nInteractions))
+          print('EM frac: '+str(eventSummary.shower[i].emFrac))
+          print('Had frac: '+str(eventSummary.shower[i].hadFrac))
+          print(self.__trigger_times)
+          print(eventSummary.eventTime)
+          print('xxxxxxxxxxxxxxxxxxxxxxxxxx')
+      print(self.__num_interactions)
+      #self.__interaction_energy = eventSummary.shower.showerEnergy
+      '''
+      
   def read_event(
       self,
       i_event
@@ -59,6 +81,38 @@ class DataReader:
     self.__neutrino_energy = eventSummary.neutrino.energy.eV
     self.__direction_weight = eventSummary.loop.directionWeight
     self.__position_weight = eventSummary.loop.positionWeight
+    
+    self.__num_interactions = len(eventSummary.shower)
+    times = []
+    energies = []
+    secondaries = []
+    had_fracs = []
+    interaction_dists = []
+    
+    for i in range(0, self.__num_interactions):
+      tof = 0
+      energies.append(eventSummary.shower[i].showerEnergy.eV)
+      secondaries.append(eventSummary.shower[i].secondary)
+      had_fracs.append(eventSummary.shower[i].hadFrac)
+      for j in range(0, detEvt.rayTracingPath[i].size()-1):
+        first_coordinate = np.zeros(3)
+        second_coordinate = np.zeros(3)
+        first_coordinate[:] = detEvt.rayTracingPath[i][j]
+        second_coordinate[:] = detEvt.rayTracingPath[i][j+1]
+        if (i == 0 and j == 0):
+            starting_point = np.copy(first_coordinate)
+        if j == 0:
+            interaction_dists.append(np.sqrt(np.sum((first_coordinate-starting_point)**2))/1e3)
+        n = detEvt.rayTracingRefractionIndices[i][j]
+        dist = np.sqrt(np.sum((second_coordinate-first_coordinate)**2))/1e3
+        tof += dist*n/(cl/1e3)
+      times.append(tof+eventSummary.shower[i].interaction_time)
+
+    self.__tof = np.array(times)
+    self.__energies = np.array(energies)
+    self.__secondaries = np.array(secondaries)
+    self.__had_fracs = np.array(had_fracs)
+    self.__int_dists = np.array(interaction_dists)
     
     if detEvt.RFdir_payload.size() > 0:
       self.__signal_direction[:] = detEvt.RFdir_payload[0]
@@ -117,7 +171,7 @@ class DataReader:
       resp = response
     time_domain = np.zeros(self.__waveforms.shape[2])
     time_domain[:resp.shape[0]] = resp
-    freq_domain = np.exp(1.j * np.angle(np.fft.rfft(time_domain)))
+    freq_domain = np.exp(1.j * np.unwrap(np.angle(np.fft.rfft(time_domain))))
     freq_domain /= np.abs(freq_domain)
     for i_pol in range(2):
       for i_channel in range(self.__waveforms.shape[1]):
@@ -263,6 +317,31 @@ class DataReader:
       self
   ):
     return self.__trigger_times
+    
+  def get_det_times(
+      self
+  ):
+    return self.__tof
+
+  def get_energies(
+      self
+  ):
+    return self.__energies
+
+  def get_secondaries(
+      self
+  ):
+    return self.__secondaries
+    
+  def get_had_fracs(
+      self
+  ):
+    return self.__had_fracs
+    
+  def get_int_dists(
+      self
+  ):
+    return self.__int_dists
   
   def get_neutrino_energy(self):
     return self.__neutrino_energy
