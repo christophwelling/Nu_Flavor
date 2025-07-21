@@ -48,13 +48,20 @@ class templateHelper:
         )
     if plot_templates:
       fig1 = plt.figure(figsize=(8, 6))
-      ax1_1 = fig1.add_subplot(111)
+      ax1_1 = fig1.add_subplot(211)
+      ax1_2 = fig1.add_subplot(212)
+      freqs = np.fft.rfftfreq(self.__templates.shape[1], 1./self.__sampling_rate)
       for i_tmp in range(self.__templates.shape[0]):
         ax1_1.plot(
           np.arange(self.__templates.shape[1]) / 3. / self.__upsampling_factor,
           self.__templates[i_tmp]
         )
+        ax1_2.plot(
+          freqs,
+          np.abs(np.fft.rfft(self.__templates[i_tmp]))
+        )
       ax1_1.grid()
+      ax1_2.grid()
       fig1.tight_layout()
       fig1.savefig('templates.png')
 
@@ -79,8 +86,7 @@ class templateHelper:
 
 
     i_template = np.argmax(tmp_corr_relative)
-    print(i_template, tmp_corr_relative)
-    return self.__templates[i_template], self.__background_data[i_template], np.argmax(i_template)
+    return self.__templates[i_template], self.__background_data[i_template], i_template
 
   def get_template_size(
       self
