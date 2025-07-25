@@ -21,11 +21,14 @@ class DataReader:
       upsampling_factor=1,
       filter_band=None
   ):
-    self.__antenna_positions = np.genfromtxt(
-      antenna_pos_file,
-      skip_header=2,
-      delimiter=','
-    )[:, 2:5]
+    if antenna_pos_file is not None:
+      self.__antenna_positions = np.genfromtxt(
+        antenna_pos_file,
+        skip_header=2,
+        delimiter=','
+      )[:, 2:5]
+    else:
+      self.__antenna_positions = None
     self.__upsampling_factor = int(upsampling_factor)
     self.__sampling_rate = 3. * self.__upsampling_factor
     self.__data_file = ROOT.TFile.Open(filename)

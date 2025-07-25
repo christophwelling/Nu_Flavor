@@ -11,18 +11,24 @@ import helpers.data_reader
 class MatchedFilterHelper:
   def __init__(
       self,
-      noise_data
+      noise_data,
+      upsampling_factor
   ):
-    self.__antenna_helper = helpers.antenna_helper.AntennaHelper()
+    self.__antenna_helper = helpers.antenna_helper.AntennaHelper(upsampling_factor)
+    self.__upsampling_factor = upsampling_factor
+    self.__n_samples = int(1024 * upsampling_factor)
     amp_data = np.genfromtxt(
       os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv',
       delimiter=','
     )
-    self.__signal_chain = amp_data[:, 1] * np.exp(1.j * amp_data[:, 2])
+    signal_chain_td = scipy.signal.resample(np.fft.irfft(amp_data[:, 1] * np.exp(1.j * amp_data[:, 2])), self.__n_samples)
+    self.__signal_chain = np.fft.rfft(signal_chain_td)
     self.__noise_reader = helpers.data_reader.DataReader(
       noise_data,
-      None
+      None,
+      upsampling_factor
       )
+    self.__noise_power_spectrum = 1.
   def generate_template(
       self,
       signal_direction: np.array,
@@ -33,14 +39,14 @@ class MatchedFilterHelper:
     efield  =NuRadioMC.SignalGen.askaryan.get_frequency_spectrum(
       1.e18,
       viewing_angle,
-      1024,
-      1./3.,
+      self.__n_samples,
+      1./3. / self.__upsampling_factor,
       'HAD',
       1.78, 
       1000.,
       'Alvarez2009'
     )
-    template = np.zeros((2, len(antenna_indices), 513), dtype=complex)
+    template = np.zeros((2, len(antenna_indices), self.__n_samples // 2 + 1), dtype=complex)
     for i_pol in range(2):
       for i_antenna, antenna_index in enumerate(antenna_indices):
         template[i_pol, i_antenna] = self.__antenna_helper.get_antenna_response_for_antenna(
@@ -74,8 +80,8 @@ class MatchedFilterHelper:
       data
   ):
     data_fd = np.fft.rfft(data, axis=2)
-    filtered_data = template * data_fd.conjugate()
-    return np.roll(np.fft.irfft(filtered_data, axis=2), 380)
+    filtered_data = (template * data_fd.conjugate() / self.__noise_power_spectrum).conjugate()
+    return -np.roll(np.fft.irfft(filtered_data, axis=2), int(-380 * self.__upsampling_factor))
 
   def estimate_background_rate(
       self,
@@ -84,7 +90,7 @@ class MatchedFilterHelper:
       corrs,
       n_events=500
   ):
-    wf = np.zeros((2, len(channel_indices), 1024))
+    wf = np.zeros((2, len(channel_indices), self.__n_samples))
     max_corr = np.zeros(min(n_events, self.__noise_reader.get_n_events()))
     noise_rms = np.zeros_like(max_corr)
     for i_event in range(min(n_events, self.__noise_reader.get_n_events())):
@@ -101,19 +107,34 @@ class MatchedFilterHelper:
         wf
       )
       noise_rms[i_event] = np.sqrt(np.mean(wf**2))
-      max_corr[i_event] = np.max(np.abs(scipy.signal.hilbert(np.sum(np.sum(wf_filtered, axis=0), axis=0))))
+      max_corr[i_event] = np.max(((np.sum(np.sum(wf_filtered, axis=0), axis=0))))
     entries, bins, patches = plt.hist(
       max_corr,
       bins=100,
       density=True,
       cumulative=-1
     )
+    plt.figure(num=1, clear=True)
     plt.plot(bins[1:], entries)
     plt.close('all')
-    corr_hilbert = np.abs(scipy.signal.hilbert(corrs))
+    # corr_hilbert = np.abs(scipy.signal.hilbert(corrs))
     probabilities = np.zeros_like(corrs)
     for i_sample in range(probabilities.shape[0]):
-      probabilities[i_sample] = entries[np.argmin(np.abs(corr_hilbert[i_sample] - bins[1:]))]
+      probabilities[i_sample] = entries[np.argmin(np.abs(corrs[i_sample] - bins[1:]))]
     return probabilities, np.mean(noise_rms)
 
+  def calculate_noise_spectral_density(
+      self,
+      n_events=100
+  ):
+    n_ev = min(n_events, self.__noise_reader.get_n_events())
+    noise_power = np.zeros((n_ev, 2, 96, self.__n_samples // 2 + 1))
+    for i_event in range(n_ev):
+      self.__noise_reader.read_event(i_event)
+      for i_ch in range(96):
+        for i_pol in range(2):
+          spec = np.fft.rfft(self.__noise_reader.get_waveform(i_ch, i_pol, False))
+          noise_power[i_event, i_pol, i_ch] = np.abs(spec)**2
+    self.__noise_power_spectrum = np.mean(noise_power, axis=(0, 1, 2))
+    self.__noise_power_spectrum[self.__noise_power_spectrum < 5.e-3 * np.max(self.__noise_power_spectrum)] = 5.e-3 * np.max(self.__noise_power_spectrum)
 

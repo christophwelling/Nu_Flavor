@@ -1,16 +1,20 @@
 import numpy as np
+import scipy.signal
 import os
 
 class AntennaHelper:
   def __init__(
-      self
+      self,
+      upsampling_factor=1
   ):
+    self.__upsampling_factor=upsampling_factor
+    self.__n_samples = int(1024 * self.__upsampling_factor)
     antenna_response_directory = os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/responses/antennas/derived/'
     self.__receiving_angles = np.array([0., 0.08726646, 0.17453293, 0.26179939, 0.34906585, 0.43633231, 0.52359878, 0.61086524, 0.6981317, 0.78539816, 0.87266463, 1.04719755, 1.22173048, 1.3962634, 1.57079633])
-    self.__boresight_response = np.zeros((2, 513), dtype=complex)
+    self.__boresight_response = np.zeros((2, self.__n_samples//2+1), dtype=complex)
     self.__boresight_response[0] = self.__read_boresight_response(antenna_response_directory + '/toyon_hh_0.csv')
     self.__boresight_response[1] = self.__read_boresight_response(antenna_response_directory + '/toyon_vv_0.csv')
-    self.__off_axis_responses = np.zeros((2, 2, self.__receiving_angles.shape[0], 513), dtype=complex)
+    self.__off_axis_responses = np.zeros((2, 2, self.__receiving_angles.shape[0], self.__n_samples//2+1), dtype=complex)
     self.__off_axis_responses[0, 0] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_hh_az.csv')
     self.__off_axis_responses[0, 1] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_hh_el.csv')
     self.__off_axis_responses[1, 0] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_vv_az.csv')
@@ -35,8 +39,8 @@ class AntennaHelper:
     data = np.genfromtxt(
       filename
     )
-    response = data[:, 1] * np.exp(1.j * data[:, 2])
-    return response
+    response_td = scipy.signal.resample(np.fft.irfft(data[:, 1] * np.exp(1.j * data[:, 2])), self.__n_samples)
+    return np.fft.rfft(response_td)
 
   def __read_off__axis_responses(
       self,
@@ -48,7 +52,8 @@ class AntennaHelper:
     response = np.zeros((data.shape[0]//513, 513), dtype=complex)
     for i_angle in range(response.shape[0]):
       response[i_angle] = data[i_angle*513:i_angle*513+513, 1] * np.exp(1.j * data[i_angle*513:i_angle*513+513, 2])
-    return response
+    response_td = scipy.signal.resample(np.fft.irfft(response, axis=1), self.__n_samples, axis=1)
+    return np.fft.rfft(response_td, axis=1)
   
   def get_antenna_response(
       self,
@@ -108,7 +113,7 @@ class AntennaHelper:
     )
     if signal_travel_time:
       dt = np.dot(signal_direction, self.__antenna_positions[antenna_index]) / 3.e8
-      freqs = np.fft.rfftfreq(1024, 1./3.e9)
+      freqs = np.fft.rfftfreq(self.__n_samples, 1./3.e9 / self.__upsampling_factor)
       return response * np.exp(-2.j * np.pi * dt * freqs)
     else:
       return response
