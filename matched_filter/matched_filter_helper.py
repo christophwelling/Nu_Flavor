@@ -42,7 +42,7 @@ class MatchedFilterHelper:
       self.__n_samples,
       1./3. / self.__upsampling_factor,
       'HAD',
-      1.78, 
+      1.79, 
       1000.,
       'Alvarez2009'
     )

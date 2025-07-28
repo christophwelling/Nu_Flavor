@@ -9,40 +9,84 @@ import helpers.template_helper
 class polarizationEstimator:
   def __init__(
       self,
-      template_helper: helpers.template_helper.templateHelper,
+      upsampling_factor=1
   ):
-    self.__tmpl_helper = template_helper
-    self.__pol_steps = np.arange(0, 361, 1.) * np.pi / 180.
+    self.__pol_steps = np.arange(0, 361, 2.) * np.pi / 180.
     self.__amp_steps = np.arange(0, 1.1, .01)
+    self.__upsampling_factor = upsampling_factor
 
-  def estimate_polarization(
+  def estimate_polarization_angle(
       self,
       waveforms,
-      pol_guess
+      matched_filter_helper,
+      signal_direction,
+      antenna_ids,
+      viewing_angle
   ):
-    template, thr, i_template = self.__tmpl_helper.pick_template(
-      waveforms[pol_guess]
+    sample_shifts = self.find_sample_shift(
+      waveforms,
+      matched_filter_helper,
+      signal_direction,
+      antenna_ids,
+      viewing_angle
     )
-    corr = scipy.signal.correlate(
-      waveforms[pol_guess],
+    template_fd = matched_filter_helper.generate_template(
+      signal_direction,
+      antenna_ids,
+      45.*np.pi/180.,
+      viewing_angle
+    )
+    template = np.fft.irfft(template_fd)
+    template = template/ np.max(np.abs(template)) * np.max(np.abs(waveforms))
+    chi2 = self.pol_scan(
+      waveforms,
+      np.roll(template, sample_shifts, axis=2)
+    )
+    rec_polarization = self.__pol_steps[np.argmin(np.min(chi2, axis=1))]
+    return rec_polarization
+  def get_pol_steps(self):
+    return self.__pol_steps
+  
+  def get_amp_step(self):
+    return self.__amp_steps
+  
+  def find_sample_shift(
+      self,
+      waveforms,
+      matched_filter_helper,
+      signal_direction,
+      antenna_ids,
+      viewing_angle
+      ):
+    corr_0 = np.zeros((2, waveforms.shape[2]))
+    for pol in np.arange(0, 360, 45) * np.pi / 180.:
+      template_0_fd = matched_filter_helper.generate_template(
+        signal_direction,
+        antenna_ids,
+        pol,
+        viewing_angle
+      )
+      corr_0[1] = np.abs(np.sum(matched_filter_helper.apply_matched_filter(
+        template_0_fd,
+        waveforms
+      ), axis=(0, 1)))
+      corr_0[0] = np.max(corr_0, axis=0)
+    sample_shift = np.argmax(corr_0[0]) + int(380 * self.__upsampling_factor)
+    return sample_shift
+    
+
+  def pol_scan(
+      self,
+      waveforms,
       template
-    )
-    max_corr = np.argmax(np.abs(corr))
-    if corr[max_corr] < 0:
-      template *= -1.
-    max_corr -= template.shape[0]
-    likelihoods = np.zeros((self.__pol_steps.shape[0], self.__amp_steps.shape[0]))
-
-    for i_pol in range(self.__pol_steps.shape[0]):
-      v_component = np.cos(self.__pol_steps[i_pol])
-      h_component = np.sin(self.__pol_steps[i_pol])
-      wfs = np.zeros((2, self.__amp_steps.shape[0], template.shape[0]))
-      wfs[:, :] = template * np.max(waveforms)
-      wfs[0] = (-wfs[0].T * self.__amp_steps * h_component).T
-      wfs[1] = (-wfs[1].T * self.__amp_steps * v_component).T
-      wfs[0] += waveforms[0][max_corr:max_corr+template.shape[0]]
-      wfs[1] += waveforms[1][max_corr:max_corr+template.shape[0]]
-      likelihoods[i_pol] = np.sum(wfs[0]**2, axis=1) + np.sum(wfs[1]**2, axis=1)    
-    return self.__pol_steps[np.argmin(np.min(likelihoods, axis=1))], self.__amp_steps[np.argmin(np.min(likelihoods, axis=0))]
-
-
+  ):
+    chi2 = np.zeros((self.__pol_steps.shape[0], self.__amp_steps.shape[0]))
+    tmp = np.zeros_like(template)
+    for i_pol, pol in enumerate(self.__pol_steps):
+      for i_amp, amp in enumerate(self.__amp_steps):
+        tmp[0] = -template[0] * amp * np.cos(pol)
+        tmp[1] = -template[1] * amp * np.sin(pol)
+        chi2[i_pol, i_amp] = np.sum(
+          (tmp - waveforms)**2
+        )
+    return chi2

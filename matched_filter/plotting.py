@@ -63,7 +63,7 @@ def plot_correlation(
   max_channel = np.argmax(np.max(np.max(np.abs(waveforms_noiseless), axis=0), axis=1))
   n_sectors = correlation.shape[1]//4
   # fig1, ax1 = plt.subplots(8, n_sectors, figsize=(8*n_sectors, 24), sharey=True, sharex=True, num=1, clear=True)
-  fig2, ax2 = plt.subplots(5, 1, figsize=(20, 12), num=2, clear=True)
+  fig2, ax2 = plt.subplots(6, 1, figsize=(20, 16), num=2, clear=True)
   # for i_sector in range(n_sectors):
   #   for i_ring in range(4):
   #     for i_pol in range(2):
@@ -125,8 +125,21 @@ def plot_correlation(
       (np.abs(scipy.signal.hilbert(np.sum(np.sum(correlation, axis=0), axis=0))))[peak[0]:peak[1]+1],
       color='C{}'.format(i_peak%6)
     )
-    ax2[3].axvline(times[peak[0]], color='k', alpha=.2)
-    ax2[3].axvline(times[peak[1]], color='k', alpha=.2)
+    # ax2[3].axvline(times[peak[0]], color='k', alpha=.2)
+    # ax2[3].axvline(times[peak[1]], color='k', alpha=.2)
+    if np.min(probabilities[peak[0]:peak[1]+1]) < 1.e-2:
+      ax2[4].axvspan(
+        times[peak[0]],
+        times[peak[1]],
+        color='C{}'.format(i_peak%6),
+        alpha=.1
+      )
+      ax2[5].axvspan(
+        times[peak[0]],
+        times[peak[1]],
+        color='C{}'.format(i_peak%6),
+        alpha=.1
+      )
   ax2[3].grid()
   ax2[4].plot(
     times,
@@ -135,6 +148,9 @@ def plot_correlation(
   ax2[4].grid()
   ax2[4].set_yscale('log')
   ax2[4].set_ylim([5.e-4, 1.1])
+  ax2[4].grid(which='major', color='k', alpha=.5, linestyle='-')
+  ax2[4].grid(which='minor', color='k', alpha=.2, linestyle='--')
+  ax2[4].minorticks_on()
   if shower_times is not None:
     for i_shower, shower_time in enumerate(shower_times):
       if i_shower == 0:
@@ -163,6 +179,16 @@ def plot_correlation(
             s='E={:.2f}EeV'.format(shower_energies[i_shower]/1.e18),
             color=col
           )
+          ax2[5].scatter(
+            shower_times,
+            shower_energies,
+            color='C0'
+          )
+  ax2[5].set_yscale('log')
+  ax2[5].set_ylim([1.e16, 1.e20])
+  ax2[5].grid()
+  for i_plot in range(6):
+    ax2[i_plot].set_xlim([times[0], times[-1]])
   fig2.tight_layout()
   fig2.savefig('plots/{}/run{}/correlation_sum_{}_{}.png'.format(flavor, run, i_event, i_trigger))
   plt.close('all')
