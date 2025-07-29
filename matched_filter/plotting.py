@@ -30,10 +30,8 @@ def plot_waveforms(
         )
         ax1[i_ring*2+i_pol, i_sector].grid()
   fig1.tight_layout()
-  if not os.path.isdir('plots/{}'.format(flavor)):
-    os.mkdir('plots/{}'.format(flavor))
   if not os.path.isdir('plots/{}/run{}'.format(flavor, run)):
-    os.mkdir('plots/{}/run{}'.format(flavor, run))
+    os.makedirs('plots/{}/run{}'.format(flavor, run))
   fig1.savefig('plots/{}/run{}/waveforms_{}_{}.png'.format(flavor, run, i_event, i_trigger))
   plt.close('all')
   return
@@ -55,10 +53,8 @@ def plot_correlation(
     peaks=None
 ):
   plt.close('all')
-  if not os.path.isdir('plots/{}'.format(flavor)):
-    os.mkdir('plots/{}'.format(flavor))
   if not os.path.isdir('plots/{}/run{}'.format(flavor, run)):
-    os.mkdir('plots/{}/run{}'.format(flavor, run))
+    os.makedirs('plots/{}/run{}'.format(flavor, run))
 
   max_channel = np.argmax(np.max(np.max(np.abs(waveforms_noiseless), axis=0), axis=1))
   n_sectors = correlation.shape[1]//4
@@ -213,10 +209,8 @@ def plot_found_pulses(
   samples_before = 32
   samples_after = 128 - samples_before
   max_channel = np.argmax(np.max(np.max(np.abs(waveforms_noiseless), axis=0), axis=1))
-  if not os.path.isdir('plots/found_pulses/{}'.format(flavor)):
-    os.mkdir('plots/found_pulses/{}'.format(flavor))
   if not os.path.isdir('plots/found_pulses/{}/run{}'.format(flavor, run)):
-    os.mkdir('plots/found_pulses/{}/run{}'.format(flavor, run))
+    os.makedirs('plots/found_pulses/{}/run{}'.format(flavor, run))
   n_peaks = 0
   freqs = np.fft.rfftfreq(128, 1. / 3.)
   for peak in peaks:
