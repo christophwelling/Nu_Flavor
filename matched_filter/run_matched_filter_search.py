@@ -134,10 +134,8 @@ for i_file, folder_name in enumerate(folders):
         np.sum(np.sum(corr, axis=0), axis=0),
         1500
       )
-      if not os.path.isdir('results/{}'.format(flavor)):
-        os.mkdir('results/{}'.format(flavor))
       if not os.path.isdir('results/{}/run{}'.format(flavor, run_id)):
-        os.mkdir('results/{}/run{}'.format(flavor, run_id))
+        os.makedirs('results/{}/run{}'.format(flavor, run_id))
       results = np.zeros((6, times.shape[0]))
       results[:2] = wf[:, max_channel] / noise_rms
       results[2:4] = wf_noiseless[:, max_channel] / noise_rms
