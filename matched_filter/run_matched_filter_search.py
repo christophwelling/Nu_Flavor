@@ -29,7 +29,6 @@ simulate_direction_errors = True
 
 upsampling_factor = 1
 n_samples = int(1024 * upsampling_factor)
-
 mf_helper = matched_filter_helper.MatchedFilterHelper(
   '~/RadioNeutrino/data/pueo/flavor/noise/run99/IceFinal_99_allTree.root',
   upsampling_factor
@@ -37,21 +36,21 @@ mf_helper = matched_filter_helper.MatchedFilterHelper(
 )
 mf_helper.calculate_noise_spectral_density()
 peakFinder = helpers.peakfinder.PeakFinder()
+
 polEstimator = helpers.polarization_estimator.polarizationEstimator()
 
 folders = []
+
 if args.run < 0:
-  folders = glob.glob(args.path)
+  folders = glob.glob(args.path+'/*')
 else:
   folders = [args.path + '/run{}'.format(args.run)]
-
 
 
 for i_file, folder_name in enumerate(folders):
   run_id = int(folder_name.split('/')[-1][3:])
   flavor = folder_name.split('/')[-2]
   filename = folder_name + '/IceFinal_{}_allTree.root'.format(run_id)
-  print(flavor)
   dataReader = helpers.data_reader.DataReader(
     filename,
     None,
@@ -65,8 +64,8 @@ for i_file, folder_name in enumerate(folders):
     if not os.path.isdir('found_pulses/{}/run{}/'.format(flavor, run_id)):
       os.makedirs('found_pulses/{}/run{}/'.format(flavor, run_id))
     found_pulses_filename = 'found_pulses/{}/run{}/pulses_{}.json'.format(flavor, run_id, i_event)
-    if os.path.isfile(found_pulses_filename):
-      continue
+    # if os.path.isfile(found_pulses_filename):
+    #   continue
     event_output = {
         'nu_energy': dataReader.get_neutrino_energy(),
         'weight': dataReader.get_event_weight(),
@@ -108,7 +107,7 @@ for i_file, folder_name in enumerate(folders):
       }
       wf = wf_[:, :, trigger_index-n_samples//2:trigger_index+n_samples//2]
       wf_noiseless = wf_noiseless_[:, :, trigger_index-n_samples//2: trigger_index+n_samples//2]
-      shower_signal_times = dataReader.get_det_times() * 1.e9 - times_[trigger_index - n_samples//2] + 215
+      shower_signal_times = dataReader.get_det_times() * 1.e9  - trigger_time + n_samples/2/upsampling_factor/3.+215
       max_channel = np.argmax(np.max(wf_noiseless, axis=(0, 2)))
 
       rec_polarization_angle = polEstimator.estimate_polarization_angle(
@@ -132,7 +131,7 @@ for i_file, folder_name in enumerate(folders):
         template,
         antennas,
         np.sum(np.sum(corr, axis=0), axis=0),
-        1500
+        1000
       )
       if not os.path.isdir('results/{}/run{}'.format(flavor, run_id)):
         os.makedirs('results/{}/run{}'.format(flavor, run_id))

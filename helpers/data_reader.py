@@ -9,9 +9,7 @@ import os
 
 cl = 3.e8
 ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libNiceMC.so")
-ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libAntarcticaRoot.so")
 ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libpueoEvent.so")
-ROOT.gSystem.Load(os.environ['PUEO_UTIL_INSTALL_DIR'] + "/lib/libPueoSim.so")
 
 class DataReader:
   def __init__(
@@ -80,9 +78,9 @@ class DataReader:
     self.__data_file.passTree.GetEntry(i_event)
     detEvt = getattr(self.__data_file.passTree, 'detectorEvents')[0]
     eventSummary = getattr(self.__data_file.passTree, 'eventSummary')
-    self.__absorption_weight = eventSummary.neutrino.path.getWeight()
-    self.__neutrino_energy = eventSummary.neutrino.energy.eV
     self.__direction_weight = eventSummary.loop.directionWeight
+    self.__absorption_weight = eventSummary.neutrino.path.getWeight()
+    self.__neutrino_energy = eventSummary.neutrino.energy
     self.__position_weight = eventSummary.loop.positionWeight
     
     self.__num_interactions = len(eventSummary.shower)
@@ -94,7 +92,7 @@ class DataReader:
     
     for i in range(0, self.__num_interactions):
       tof = 0
-      energies.append(eventSummary.shower[i].showerEnergy.eV)
+      energies.append(eventSummary.shower[i].showerEnergy)
       secondaries.append(eventSummary.shower[i].secondary)
       had_fracs.append(eventSummary.shower[i].hadFrac)
       for j in range(0, detEvt.rayTracingPath[i].size()-1):
@@ -132,7 +130,7 @@ class DataReader:
       self.__polarization_angle = 0
     n_samples = np.array(detEvt.waveformsV[0].GetY()).shape[0] * self.__upsampling_factor
     self.__trace_start_time = detEvt.waveformsV[0].GetPointX(0) * 1.e9
-    self.__trigger_times = np.array(detEvt.triggerTimes)*1.e9
+    self.__trigger_times = np.array(detEvt.triggerResults.triggeredSamples) / 3. / self.__upsampling_factor + self.__trace_start_time
     self.__waveforms = np.zeros((2, self.__n_channels, n_samples))
     self.__waveforms_noiseless = np.zeros((2, self.__n_channels, n_samples))
     freqs = scipy.fft.rfftfreq(n_samples, 1./self.__sampling_rate)
@@ -163,7 +161,7 @@ class DataReader:
         if filter_response is not None:
           self.__waveforms_noiseless[0, i_channel] = scipy.fft.irfft(scipy.fft.rfft(self.__waveforms_noiseless[0, i_channel])*filter_response)
           self.__waveforms_noiseless[1, i_channel] = scipy.fft.irfft(scipy.fft.rfft(self.__waveforms_noiseless[1, i_channel])*filter_response)
-
+    
   def dedisperse(
       self,
       response
@@ -184,7 +182,7 @@ class DataReader:
   def get_times(
       self
   ):
-    return np.arange(self.__waveforms.shape[2]) / self.__sampling_rate + self.__trace_start_time
+    return np.arange(self.__waveforms.shape[2]) / self.__sampling_rate  + self.__trace_start_time
   
   def get_max_channel(
       self,
