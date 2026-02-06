@@ -1,0 +1,5 @@
+__pycache__
+plots/
+results/
+found_pulses/
+*.png
