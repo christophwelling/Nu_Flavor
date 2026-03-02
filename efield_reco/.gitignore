@@ -1,0 +1,8 @@
+__pycache__
+plots
+gaussian_process_example.py
+noise_covariance.pkl
+run_model.py
+simple_model.py
+spectrum_inference.py
+test_covariance.py
