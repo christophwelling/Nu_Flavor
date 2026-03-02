@@ -5,6 +5,8 @@ import Nu_Flavor.helpers.antenna_helper
 import Nu_Flavor.efield_reco.efield_reconstructor
 import argparse
 import jax
+import os
+import json
 jax.config.update("jax_enable_x64", True)
 
 parser = argparse.ArgumentParser()
@@ -23,7 +25,7 @@ efield_reconstructor = Nu_Flavor.efield_reco.efield_reconstructor.NiftyEfieldRec
   sampling_rate=3.,
   time_mean=2,
   time_std=1.,
-  probability_samples=100,
+  probability_samples=50,
   correlated_field_args={
     "offset_mean": (-4.),
     "offset_std": (.8, 5e-1),
@@ -32,12 +34,13 @@ efield_reconstructor = Nu_Flavor.efield_reco.efield_reconstructor.NiftyEfieldRec
     "flexibility": (.2, 1.5),
     "asperity": (.2, 1.0)
   },
-  n_repeats=4
+  n_repeats=2
 )
 for i_event in range(reader.get_n_events()):
   if args.event_id >= 0 and i_event != args.event_id:
     continue
   reader.read_event(i_event)
+  run = reader.get_run()
   signal_direction = reader.get_signal_direction()
   antenna_indices = antenna_helper.get_antenna_indices(
     signal_direction,
@@ -81,11 +84,14 @@ for i_event in range(reader.get_n_events()):
       )
       ax1[i_ant, i_pol].grid()
   fig1.tight_layout()
-  fig1.savefig('plots/full_reco/prep_waveforms/waveforms_{}.png'.format(i_event))
+  if not os.path.isdir('plots/full_reco/prep_waveforms/run{}'.format(run)):
+    os.makedirs('plots/full_reco/prep_waveforms/run{}'.format(run))
+  fig1.savefig('plots/full_reco/prep_waveforms/run{}/waveforms_{}.png'.format(run, i_event))
   efield_reconstructor.build_model(
     antenna_indices,
     signal_direction
   )
+  """
   fig2, ax2 = plt.subplots(prep_waveforms.shape[1], 5, figsize=(30,3*prep_waveforms.shape[1]))
   for i_sample in range(10):
     prior_sample = efield_reconstructor.generate_prior_sample()
@@ -135,6 +141,7 @@ for i_event in range(reader.get_n_events()):
     ax2[i_ant, 4].set_yscale('log')
   fig2.tight_layout()
   fig2.savefig('plots/full_reco/priors/priors_{}.png'.format(i_event))
+  """
   efield_reconstructor.run_reco()
   fig3, ax3 = plt.subplots(prep_waveforms.shape[1], 4, figsize=(24, 3*prep_waveforms.shape[1]))
   posterior_v_spec = efield_reconstructor.get_posterior_voltage_spectrum_samples([16, 84])
@@ -223,7 +230,10 @@ for i_event in range(reader.get_n_events()):
         linestyle='--'
       )
   fig3.tight_layout()
-  fig3.savefig('plots/full_reco/rec_results/rec_result_{}.png'.format(i_event))
+  if not os.path.isdir('plots/full_reco/rec_results/run{}'.format(run)):
+    os.makedirs('plots/full_reco/rec_results/run{}'.format(run))
+
+  fig3.savefig('plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(run, i_event))
 
   fig4, ax4 = plt.subplots(1, 3, figsize=(16, 8))
   rec_efield_spec = efield_reconstructor.get_rec_efield_spectrum()
@@ -279,6 +289,11 @@ for i_event in range(reader.get_n_events()):
     alpha=.5,
     linestyle=':'
   )
+  power_spectrum_fit = np.polynomial.polynomial.Polynomial.fit(
+    np.log10(model_k_vectors[1:]),
+    np.log10(rec_power_spectrum[4, 1:]),
+    1
+  )
   for i_range in range(2):
     ax4[1].fill_between(
       model_k_vectors,
@@ -300,6 +315,13 @@ for i_event in range(reader.get_n_events()):
     color='C2',
     linestyle='--'
   )
+  ax4[1].plot(
+    model_k_vectors,
+    np.power(10, power_spectrum_fit(np.log10(model_k_vectors))),
+    color='r',
+    linestyle=':',
+    alpha=.5
+  )
   ax4[1].grid()
   ax4[1].set_xscale('log')
   ax4[1].set_yscale('log')
@@ -312,4 +334,9 @@ for i_event in range(reader.get_n_events()):
   ax4[2].grid()
   ax4[2].set_xlabel('t [ns]')
   fig4.tight_layout()
-  fig4.savefig('plots/full_reco/rec_results/rec_efield_{}.png'.format(i_event))
+  fig4.savefig('plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(run, i_event))
+  if not os.path.isdir('results/rec_results/run{}'.format(run)):
+    os.makedirs('results/rec_results/run{}'.format(run))
+  results_dic = {'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]]}
+  with open('results/rec_results/run{}/results{}'.format(run, i_event), 'w') as outfile:
+    json.dump(results_dic, outfile)

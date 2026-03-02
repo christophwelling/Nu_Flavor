@@ -43,6 +43,8 @@ class DataReader:
     self.__neutrino_energy = 0
     self.__polarization_angle = 0
     self.__viewing_angle = 0
+    self.__efields = None
+    self.__run = 0
 
   def get_n_events(
       self
@@ -82,7 +84,7 @@ class DataReader:
     self.__absorption_weight = eventSummary.neutrino.path.getWeight()
     self.__neutrino_energy = eventSummary.neutrino.energy
     self.__position_weight = eventSummary.loop.positionWeight
-    
+    self.__run = eventSummary.runNumber
     self.__num_interactions = len(eventSummary.shower)
     times = []
     energies = []
@@ -124,7 +126,7 @@ class DataReader:
       pol = np.array(detEvt.polarizationAtDetector)
       self.__polarization_angle = -np.arctan2(np.dot(pol, dir_x), np.dot(pol, dir_z))
       self.__viewing_angle = detEvt.viewAngle[0]
-
+      
     else:
       self.__signal_direction = np.zeros(3)
       self.__polarization_angle = 0
@@ -161,7 +163,10 @@ class DataReader:
         if filter_response is not None:
           self.__waveforms_noiseless[0, i_channel] = scipy.fft.irfft(scipy.fft.rfft(self.__waveforms_noiseless[0, i_channel])*filter_response)
           self.__waveforms_noiseless[1, i_channel] = scipy.fft.irfft(scipy.fft.rfft(self.__waveforms_noiseless[1, i_channel])*filter_response)
-    
+    self.__efields = np.zeros((detEvt.signalAtDetector.size(), 1024))
+    for i_efield in range(self.__efields.shape[0]):
+      if detEvt.signalAtDetector[i_efield].GetN() == 1024:
+        self.__efields[i_efield] = detEvt.signalAtDetector[i_efield].GetY()  
   def dedisperse(
       self,
       response
@@ -289,10 +294,13 @@ class DataReader:
         rf_dir
       ) / .3
       sample_offset = int(np.round(delta_t * self.__sampling_rate))
-      n_sum_channels += 1
+      n_sum_channels += 1  
       beam_sum += np.roll(self.__waveforms[polarization, i_channel], sample_offset)
     beam_sum /= n_sum_channels
     return beam_sum
+
+  def get_efields(self):
+    return self.__efields
 
   def get_signal_direction(
       self
@@ -352,3 +360,5 @@ class DataReader:
 
   def get_viewing_angle(self):
     return self.__viewing_angle
+  def get_run(self):
+    return self.__run

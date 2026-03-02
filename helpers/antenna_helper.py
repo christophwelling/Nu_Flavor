@@ -7,9 +7,10 @@ class AntennaHelper:
       self,
       upsampling_factor=1
   ):
+    pueosim_dir = os.getenv('PUEO_UTIL_INSTALL_DIR')
     self.__upsampling_factor=upsampling_factor
     self.__n_samples = int(1024 * self.__upsampling_factor)
-    antenna_response_directory = os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/responses/antennas/derived/'
+    antenna_response_directory = pueosim_dir + '/share/pueo/responses/antennas/derived/'
     self.__receiving_angles = np.array([0., 0.08726646, 0.17453293, 0.26179939, 0.34906585, 0.43633231, 0.52359878, 0.61086524, 0.6981317, 0.78539816, 0.87266463, 1.04719755, 1.22173048, 1.3962634, 1.57079633])
     self.__boresight_response = np.zeros((2, self.__n_samples//2+1), dtype=complex)
     self.__boresight_response[0] = self.__read_boresight_response(antenna_response_directory + '/toyon_hh_0.csv')
@@ -21,16 +22,24 @@ class AntennaHelper:
     self.__off_axis_responses[1, 1] = self.__read_off__axis_responses(antenna_response_directory + '/toyon_vv_el.csv')
 
     position_data = np.genfromtxt(
-      os.environ['PUEO_UTIL_INSTALL_DIR'] + '/share/pueo/geometry/jun25/qrh.dat',
+      pueosim_dir + '/share/pueo/geometry/jun25/qrh.dat',
       delimiter=',',
       skip_header=2
     )
     self.__antenna_positions = position_data[:, 2:5]
     self.__antenna_boresights = np.zeros_like(self.__antenna_positions)
     degrad = np.pi / 180.
+    self.__antenn_azimuths = position_data[:, 6]*degrad
     self.__antenna_boresights[:, 0] = np.cos(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
     self.__antenna_boresights[:, 1] = np.sin(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
     self.__antenna_boresights[:, 2] = np.sin(position_data[:, 5]*degrad)
+    ###### Signal Chain Response ######
+    amp_response_data = np.genfromtxt(
+      pueosim_dir + '/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv',
+      delimiter=','
+    )
+    self.__amp_response = amp_response_data[:, 1] * np.exp(1.j * amp_response_data[:, 2])
+    
 
   def __read_boresight_response(
       self,
@@ -90,9 +99,14 @@ class AntennaHelper:
     if np.dot(signal_direction, antenna_boresight) > 0:
       return np.zeros(513)
     antenna_local_x = np.cross(antenna_boresight, np.array([0, 0, 1]))
+    antenna_local_x /= np.sqrt(np.sum(antenna_local_x**2))
     antenna_local_z = np.cross(antenna_boresight, antenna_local_x)
-    elevation = np.arcsin(np.abs(np.dot(-signal_direction, antenna_local_z)))
-    azimuth = np.arcsin(np.abs(np.dot(-signal_direction, antenna_local_x)))
+    antenna_local_z /= np.sqrt(np.sum(antenna_local_z**2))
+    xproj = np.abs(np.dot(-signal_direction, antenna_local_x))
+    zproj = np.abs(np.dot(-signal_direction, antenna_local_z))
+    boresight_proj = np.abs(np.dot(-signal_direction, antenna_boresight))
+    elevation = np.arctan(zproj /boresight_proj)
+    azimuth = np.arctan(xproj / boresight_proj)
     return self.get_antenna_response(
       azimuth,
       elevation,
@@ -112,14 +126,38 @@ class AntennaHelper:
       polarization
     )
     if signal_travel_time:
-      dt = np.dot(signal_direction, self.__antenna_positions[antenna_index]) / 3.e8
+      dt = self.get_signal_travel_time(signal_direction, antenna_index)
       freqs = np.fft.rfftfreq(self.__n_samples, 1./3.e9 / self.__upsampling_factor)
       return response * np.exp(-2.j * np.pi * dt * freqs)
     else:
       return response
-    
+  def get_signal_travel_time(
+      self,
+      signal_direction,
+      antenna_index
+    ):
+    return np.dot(signal_direction, self.__antenna_positions[antenna_index]) / 299792458.
   def get_antenna_positions(self):
     return np.copy(self.__antenna_positions)
   
   def get_antenna_boresights(self):
     return np.copy(self.__antenna_boresights)
+  
+  def get_amp_response(self):
+    return self.__amp_response
+  
+  def get_antenna_indices(
+      self,
+      signal_direction,
+      max_azimuth_difference
+  ):
+    antenna_boresights = self.get_antenna_boresights()
+    antenna_boresights[:, 2] = 0
+    antenna_boresights = (antenna_boresights.T / np.sqrt(np.sum(antenna_boresights**2, axis=1))).T
+    signal_dir = np.copy(signal_direction)
+    signal_dir[2] = 0
+    signal_dir /= np.sqrt(np.sum(signal_dir**2))
+    indices = np.arange(antenna_boresights.shape[0], dtype=int)
+    return indices[np.dot(-signal_dir, antenna_boresights.T) > np.cos(max_azimuth_difference)]
+  def get_antenna_azimuth(self, antenna_id):
+    return self.__antenn_azimuths[antenna_id]
