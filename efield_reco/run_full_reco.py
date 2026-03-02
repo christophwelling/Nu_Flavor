@@ -337,6 +337,10 @@ for i_event in range(reader.get_n_events()):
   fig4.savefig('plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(run, i_event))
   if not os.path.isdir('results/rec_results/run{}'.format(run)):
     os.makedirs('results/rec_results/run{}'.format(run))
-  results_dic = {'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]]}
+  results_dic = {
+    'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]],
+    'event_index': i_event,
+    'run_id': run
+    }
   with open('results/rec_results/run{}/results{}'.format(run, i_event), 'w') as outfile:
     json.dump(results_dic, outfile)
