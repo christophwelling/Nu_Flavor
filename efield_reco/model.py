@@ -2,8 +2,8 @@ import nifty.re as jft
 import jax.numpy as jnp
 import jax
 jax.config.update("jax_enable_x64", True)
-import detector_model
 import copy
+import numpy as np
 
 class SignalModel(jft.Model):
   def __init__(
@@ -15,7 +15,8 @@ class SignalModel(jft.Model):
       time_mean,
       time_std,
       n_padding,
-      detector_response
+      detector_response,
+      polarization_projections=None
       ):
     self.__n_channels = n_channels
     self.__n_samples = n_samples
@@ -35,8 +36,18 @@ class SignalModel(jft.Model):
       1./sampling_rate,
       **self.__correlated_field_args
     )
-    self.__detector_response = jnp.array(detector_response)
-
+    if detector_response is not None:
+      self.__detector_response = jnp.array(detector_response)
+      self.__detector_response2 = jnp.transpose(detector_response, (0, 2, 1))
+    else:
+      self.__detector_response2 = jnp.ones((2, self.__n_channels, self.__n_samples_spec))
+    if polarization_projections is None:
+      projections = np.zeros((n_channels, 2, 2))
+      projections[:, 0, 0] = 1
+      projections[:, 1, 1] = 1
+      self.__pol_projections = jnp.array(projections)
+    else:
+      self.__pol_projections = polarization_projections
     self.__cfm_model = self.__cfm.finalize()
     self.__time_prior = jft.NormalPrior(
       time_mean,
@@ -50,35 +61,45 @@ class SignalModel(jft.Model):
     )
     self.__polarization_prior = jft.NormalPrior(
       0,
-      10.,
+      3.,
       name='polarization_model'
     )
     super().__init__(
-      domain=self.__cfm_model.domain | self.__time_prior.domain | self.__phase_prior.domain | self.__polarization_prior.domain
+      domain=self.__cfm_model.domain | self.__time_prior.domain | self.__phase_prior.domain | self.__polarization_prior.domain,
+      white_init=True
     )
-
       
   def __call__(self, x):
     return self.get_voltage_trace(x)
-    #  val =  self.__harmonic_dvol * self.__ht(self.__sqrt_harmonic_cov * x)
-    #  return val - jnp.min(val)
-  
+
   def get_power_spectrum(self, x):
     return self.__cfm.power_spectrum(x)
   
   def get_voltage_spectrum(self, x):
-    return  jnp.reshape(jnp.array([
-      jnp.cos(self.__polarization_prior(x)) * self.get_efield_spectrum(x),
-      jnp.sin(self.__polarization_prior(x)) * self.get_efield_spectrum(x)
-    ]), (2, self.__n_samples_spec, 1)) * self.__detector_response
+    #pol_sig = jnp.reshape(jnp.array([
+    #  jnp.sin(self.__polarization_prior(x)) * self.get_efield_spectrum(x),
+    #  jnp.cos(self.__polarization_prior(x)) * self.get_efield_spectrum(x)
+    #]), (2, self.__n_samples_spec, 1))
+    pol_sig2 = jnp.expand_dims(jnp.array([
+      (jnp.sin(self.__polarization_prior(x))*self.__pol_projections[:, 0, 0] + jnp.cos(self.__polarization_prior(x))*self.__pol_projections[:, 0, 1]),
+      (jnp.cos(self.__polarization_prior(x))*self.__pol_projections[:, 1, 1] + jnp.sin(self.__polarization_prior(x))*self.__pol_projections[:, 1, 0])
+    ]), axis=2) * self.get_efield_spectrum(x)
+    ret = pol_sig2 * self.__detector_response2
+    return  jnp.transpose(ret, (0, 2, 1))
 
   def get_efield_spectrum(self, x):
-    spec = jnp.exp(jnp.log(10)*self.__cfm_model(x)[:-self.__n_padding]) * jnp.exp(
+    spec = jnp.exp(jnp.log(10)*self.__cfm_model(x)[:self.__n_samples_spec]) * jnp.exp(
       -2.j * jnp.pi * (self.__time_prior(x)*self.__freqs + self.__phase_prior(x))
       )
     spec.at[0].set(0)
     spec.at[self.__n_samples].set(0)
     return spec
+  def get_abs_efield_spectrum(self, x):
+    return jnp.exp(jnp.log(10)*self.__cfm_model(x)[:self.__n_samples_spec])
+
+  def get_full_abs_efield_spectrum(self, x):
+    return jnp.exp(jnp.log(10) * self.__cfm_model(x))
+
   def get_efield_trace(self, x):
     return jnp.fft.irfft(self.get_efield_spectrum(x))
   

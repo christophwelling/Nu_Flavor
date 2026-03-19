@@ -11,6 +11,7 @@ jax.config.update("jax_enable_x64", True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', type=str)
+parser.add_argument('subfolder', type=str)
 parser.add_argument('--event_id', type=int, default=-1)
 args = parser.parse_args()
 
@@ -24,19 +25,20 @@ efield_reconstructor = Nu_Flavor.efield_reco.efield_reconstructor.NiftyEfieldRec
   n_samples=256,
   sampling_rate=3.,
   time_mean=2,
-  time_std=1.,
-  probability_samples=50,
+  time_std=.5,
+  probability_samples=200,
   correlated_field_args={
-    "offset_mean": (-4.),
-    "offset_std": (.8, 5e-1),
-    "fluctuations": (.5, 2.),
+    "offset_mean": (-2.5),
+    "offset_std": (.5, 5e-1),
+    "fluctuations": (.5, 1.),
     "loglogavgslope": (-2.3, 0.5),
     "flexibility": (.2, 1.5),
-    "asperity": (.2, 1.0)
+    "asperity": (.2, .5)
   },
-  n_repeats=2
+  n_repeats=10
 )
 for i_event in range(reader.get_n_events()):
+  print("reconstructing event ", i_event)
   if args.event_id >= 0 and i_event != args.event_id:
     continue
   reader.read_event(i_event)
@@ -44,7 +46,7 @@ for i_event in range(reader.get_n_events()):
   signal_direction = reader.get_signal_direction()
   antenna_indices = antenna_helper.get_antenna_indices(
     signal_direction,
-    30. * np.pi / 180.
+    45. * np.pi / 180.
   )
   waveforms = np.zeros((2, len(antenna_indices), 2048))
   waveforms_noiseless = np.zeros_like(waveforms)
@@ -84,14 +86,13 @@ for i_event in range(reader.get_n_events()):
       )
       ax1[i_ant, i_pol].grid()
   fig1.tight_layout()
-  if not os.path.isdir('plots/full_reco/prep_waveforms/run{}'.format(run)):
-    os.makedirs('plots/full_reco/prep_waveforms/run{}'.format(run))
-  fig1.savefig('plots/full_reco/prep_waveforms/run{}/waveforms_{}.png'.format(run, i_event))
+  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run)):
+    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run))
+  fig1.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}/waveforms_{}.png'.format(args.subfolder, run, i_event))
   efield_reconstructor.build_model(
     antenna_indices,
     signal_direction
   )
-  """
   fig2, ax2 = plt.subplots(prep_waveforms.shape[1], 5, figsize=(30,3*prep_waveforms.shape[1]))
   for i_sample in range(10):
     prior_sample = efield_reconstructor.generate_prior_sample()
@@ -140,8 +141,10 @@ for i_event in range(reader.get_n_events()):
       ax2[i_ant, i_plot].grid()
     ax2[i_ant, 4].set_yscale('log')
   fig2.tight_layout()
-  fig2.savefig('plots/full_reco/priors/priors_{}.png'.format(i_event))
-  """
+  if not os.path.exists('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run)):
+    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run))
+  fig2.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/priors_{}.png'.format(args.subfolder, run, i_event))
+
   efield_reconstructor.run_reco()
   fig3, ax3 = plt.subplots(prep_waveforms.shape[1], 4, figsize=(24, 3*prep_waveforms.shape[1]))
   posterior_v_spec = efield_reconstructor.get_posterior_voltage_spectrum_samples([16, 84])
@@ -230,10 +233,10 @@ for i_event in range(reader.get_n_events()):
         linestyle='--'
       )
   fig3.tight_layout()
-  if not os.path.isdir('plots/full_reco/rec_results/run{}'.format(run)):
-    os.makedirs('plots/full_reco/rec_results/run{}'.format(run))
+  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run)):
+    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run))
 
-  fig3.savefig('plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(run, i_event))
+  fig3.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(args.subfolder, run, i_event))
 
   fig4, ax4 = plt.subplots(1, 3, figsize=(16, 8))
   rec_efield_spec = efield_reconstructor.get_rec_efield_spectrum()
@@ -334,9 +337,9 @@ for i_event in range(reader.get_n_events()):
   ax4[2].grid()
   ax4[2].set_xlabel('t [ns]')
   fig4.tight_layout()
-  fig4.savefig('plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(run, i_event))
-  if not os.path.isdir('results/rec_results/run{}'.format(run)):
-    os.makedirs('results/rec_results/run{}'.format(run))
+  fig4.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(args.subfolder, run, i_event))
+  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run)):
+    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run))
   results_dic = {'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]]}
-  with open('results/rec_results/run{}/results{}'.format(run, i_event), 'w') as outfile:
+  with open('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}/results{}'.format(args.subfolder, run, i_event), 'w') as outfile:
     json.dump(results_dic, outfile)

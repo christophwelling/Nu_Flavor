@@ -2,14 +2,19 @@ import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 import nifty.re as jft
-import model
 import Nu_Flavor.helpers.antenna_helper
 import Nu_Flavor.efield_reco.model
 import scipy.signal
 import scipy.linalg
 import jax.random
 import pickle
-
+import logging
+#loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+#for logger in loggers:
+#    print('--> logger name', logger.name)
+#    logger.setLevel(logging.WARNING)
+logger = logging.getLogger('nifty.re.logger')
+logger.setLevel(logging.WARNING)
 class NiftyEfieldReco:
   def __init__(
       self,
@@ -59,7 +64,7 @@ class NiftyEfieldReco:
       -self.__i_template_max+self.__n_samples//10)[:self.__n_samples]
     self.__rng_key = jax.random.PRNGKey(42)
     self.__noise_rms = 0
-    self.__noise_covariance_data = pickle.load(open('noise_covariance.pkl', 'rb'))
+    self.__noise_covariance_data = pickle.load(open('/home/christophwelling/RadioNeutrino/pueo/Nu_Flavor/efield_reco/noise_covariance.pkl', 'rb'))
     self.__noise_covariance = None
     self.__n_repeats = n_repeats
 
@@ -134,6 +139,12 @@ class NiftyEfieldReco:
             False
           ) * self.__det.get_amp_response()
         )
+    pol_projections = np.zeros((len(antenna_indices), 2, 2))
+    for i_ant, antenna_index in enumerate(antenna_indices):
+      pol_projections[i_ant] = self.__det.get_polarization_decomposition(
+        signal_direction,
+        antenna_index
+      )
     max_sample = np.argmax(np.max(np.max(np.abs(det_responses_td), axis=0), axis=0))
     det_responses_td = np.roll(det_responses_td, -max_sample+20, axis=2)
     self.__det_response = np.fft.rfft(det_responses_td[:, :, :self.__n_samples], axis=2)
@@ -145,7 +156,8 @@ class NiftyEfieldReco:
       self.__time_mean,
       self.__time_std,
       self.__n_padding,
-      np.transpose(self.__det_response, (0, 2, 1))
+      np.transpose(self.__det_response, (0, 2, 1)),
+      pol_projections
     )
 
   def generate_prior_sample(
