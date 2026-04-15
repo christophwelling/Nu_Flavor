@@ -9,10 +9,6 @@ import scipy.linalg
 import jax.random
 import pickle
 import logging
-#loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
-#for logger in loggers:
-#    print('--> logger name', logger.name)
-#    logger.setLevel(logging.WARNING)
 logger = logging.getLogger('nifty.re.logger')
 logger.setLevel(logging.WARNING)
 class NiftyEfieldReco:
@@ -25,12 +21,14 @@ class NiftyEfieldReco:
       correlated_field_args=None,
       n_padding=None,
       probability_samples=20,
-      n_repeats=3
+      n_repeats=3,
+      upsampling_factor=5
   ):
-    self.__n_samples = n_samples
-    self.__sampling_rate = sampling_rate
-    self.__times = np.arange(n_samples) / sampling_rate
-    self.__freqs = np.fft.rfftfreq(n_samples, 1./sampling_rate)
+    self.__upsampling_factor = upsampling_factor
+    self.__n_samples = n_samples * upsampling_factor
+    self.__sampling_rate = sampling_rate * upsampling_factor
+    self.__times = np.arange(self.__n_samples) / self.__sampling_rate
+    self.__freqs = np.fft.rfftfreq(self.__n_samples, 1./self.__sampling_rate)
     self.__n_freqs = self.__freqs.shape[0]
     self.__time_mean = time_mean
     self.__time_std = time_std
@@ -54,10 +52,11 @@ class NiftyEfieldReco:
     self.__det_response = None
     self.__waveforms = None
     self.__noiseless_waveforms = None
-    self.__det = Nu_Flavor.helpers.antenna_helper.AntennaHelper()
+    self.__det = Nu_Flavor.helpers.antenna_helper.AntennaHelper(upsampling_factor=self.__upsampling_factor)
     self.__template = np.fft.irfft(
       self.__det.get_antenna_response(0, 0, 1) * self.__det.get_amp_response()
     )
+    self.__rescaling_factor = 1.
     self.__i_template_max = np.argmax(self.__template)
     self.__template = np.roll(
       self.__template,
@@ -75,20 +74,24 @@ class NiftyEfieldReco:
       pulse_time,
       noiseless_waveforms=None
   ):
-    wfs = np.zeros_like(waveforms)
-    corrs = np.zeros((waveforms.shape[1], waveforms.shape[2]+self.__template.shape[0]-1))
+    wfs = np.zeros((waveforms.shape[0], waveforms.shape[1], waveforms.shape[2]*self.__upsampling_factor))
+    wfs_upsampled = np.zeros_like(wfs)
+    for i_pol in range(waveforms.shape[0]):
+      for i_channel in range(waveforms.shape[1]):
+        wfs_upsampled[i_pol, i_channel] = scipy.signal.resample(waveforms[i_pol, i_channel], wfs_upsampled.shape[2])
+    corrs = np.zeros((wfs_upsampled.shape[1], wfs_upsampled.shape[2]+self.__template.shape[0]-1))
     i_target = np.argmin(self.__times-pulse_time) - self.__i_template_max
     i_offsets = np.round(time_offsets * self.__sampling_rate).astype(int)
     i_offsets -= np.min(i_offsets)
     for i_channel in range(waveforms.shape[1]):
       for i_pol in range(2):
         corrs[i_channel] += np.abs(scipy.signal.correlate(
-          np.roll(waveforms[i_pol, i_channel], -i_offsets[i_channel]),
+          np.roll(wfs_upsampled[i_pol, i_channel], -i_offsets[i_channel]),
           self.__template,
           mode='full'
         ))
     corr_shift = scipy.signal.correlation_lags(
-      waveforms.shape[2],
+      wfs_upsampled.shape[2],
       self.__template.shape[0],
       mode='full'
     )[np.argmax(np.sum(corrs, axis=0))]
@@ -96,17 +99,19 @@ class NiftyEfieldReco:
       wf_noiseless = np.zeros_like(wfs)
     for i_channel in range(waveforms.shape[1]):
       for i_pol in range(2):
-        wfs[i_pol, i_channel] = np.roll(waveforms[i_pol, i_channel], -corr_shift-i_offsets[i_channel])
+        wfs[i_pol, i_channel] = np.roll(wfs_upsampled[i_pol, i_channel], -corr_shift-i_offsets[i_channel])
         if noiseless_waveforms is not None:
-          wf_noiseless[i_pol, i_channel] = np.roll(noiseless_waveforms[i_pol, i_channel], -corr_shift-i_offsets[i_channel])
-    self.__noise_rms = np.sqrt(np.mean(wfs[:, :, wfs.shape[2]//2:]**2))
+          wf_noiseless[i_pol, i_channel] = np.roll(scipy.signal.resample(noiseless_waveforms[i_pol, i_channel], wf_noiseless.shape[2]), -corr_shift-i_offsets[i_channel])
     self.__waveforms = wfs[:, :, :self.__n_samples]
     self.__noiseless_waveforms = wf_noiseless[:, :, :self.__n_samples]
-    self.__actual_noise_covariance = np.matrix(self.__noise_covariance_data[0, :self.__n_samples, :self.__n_samples]
-    )
+    self.__actual_noise_covariance = np.matrix(self.__noise_covariance_data[0, :self.__n_samples, :self.__n_samples])
+    self.__rescaling_factor = 1. / np.max(np.abs(self.__waveforms))
+    self.__waveforms *= self.__rescaling_factor
+    self.__noiseless_waveforms *= self.__rescaling_factor
+    self.__noise_rms = np.sqrt(np.mean(wfs[:, :, wfs.shape[2]//2:]**2)) * self.__rescaling_factor
     
     self.__noise_covariance = np.matrix(self.__noise_covariance_data[2, :self.__n_samples, :self.__n_samples]
-    )
+    ) / self.__rescaling_factor
     self.__sqrt_noise_covariance = scipy.linalg.sqrtm(self.__noise_covariance)
 
   def get_times(self):
@@ -117,18 +122,18 @@ class NiftyEfieldReco:
 
   def get_waveforms(self, noiseless=False):
     if noiseless:
-      return self.__noiseless_waveforms
+      return self.__noiseless_waveforms / self.__rescaling_factor
     else:
-      return self.__waveforms
+      return self.__waveforms / self.__rescaling_factor
   def get_noise_rms(self):
-    return self.__noise_rms
+    return self.__noise_rms / self.__rescaling_factor
 
   def build_model(
       self,
       antenna_indices,
       signal_direction
   ):
-    det_responses_td = np.zeros((2, len(antenna_indices), 1024))
+    det_responses_td = np.zeros((2, len(antenna_indices), 1024 * self.__upsampling_factor))
     for i_ant, antenna_index in enumerate(antenna_indices):
       for i_pol in range(2):
         det_responses_td[i_pol, i_ant] = np.fft.irfft(
@@ -165,27 +170,29 @@ class NiftyEfieldReco:
   ):
       self.__rng_key, subkey = jax.random.split(self.__rng_key)
       latent_sample = jft.random_like(subkey, self.__model.domain)
-      sample = self.__model(latent_sample)
+      sample = self.__model(latent_sample) / self.__rescaling_factor
       return sample
   def generate_efield_prior(
       self
     ):
       self.__rng_key, subkey = jax.random.split(self.__rng_key)
       latent_sample = jft.random_like(subkey, self.__model.domain)
-      sample = self.__model.get_efield_trace(latent_sample)
+      sample = self.__model.get_efield_trace(latent_sample) / self.__rescaling_factor
       return sample
   def noise_cov_inv(self, x):
-    ret = jnp.zeros_like(x)
-    for i_pol in range(2):
-      for i_ch in range(x.shape[2]):
-        ret = ret.at[i_pol, :, i_ch].set(self.__noise_covariance @ x[i_pol, :, i_ch])
-    return ret
+    return x / self.__noise_rms**2
+    # ret = jnp.zeros_like(x)
+    # for i_pol in range(2):
+    #   for i_ch in range(x.shape[2]):
+    #     ret = ret.at[i_pol, :, i_ch].set(self.__noise_covariance @ x[i_pol, :, i_ch])
+    # return ret
   def noise_std_inv(self, x):
-    ret = jnp.zeros_like(x)
-    for i_pol in range(2):
-      for i_ch in range(x.shape[2]):
-        ret = ret.at[i_pol, :, i_ch].set(self.__sqrt_noise_covariance @ x[i_pol, :, i_ch])
-    return ret
+    return x / self.__noise_rms
+    # ret = jnp.zeros_like(x)
+    # for i_pol in range(2):
+    #   for i_ch in range(x.shape[2]):
+    #     ret = ret.at[i_pol, :, i_ch].set(self.__sqrt_noise_covariance @ x[i_pol, :, i_ch])
+    # return ret
 
   def run_reco(
       self
@@ -211,7 +218,7 @@ class NiftyEfieldReco:
   def get_posterior_voltage_spectrum_samples(self, percentiles=None):
     samples = np.zeros((len(self.__posterior_samples), 2, self.__n_freqs, self.__waveforms.shape[1]), dtype=complex)
     for i_sample, sample in enumerate(self.__posterior_samples): 
-      samples[i_sample] = self.__model.get_voltage_spectrum(sample)
+      samples[i_sample] = self.__model.get_voltage_spectrum(sample) / self.__rescaling_factor
     samples = np.transpose(samples, (0, 1, 3, 2))
     if percentiles is None:
       return samples
@@ -225,7 +232,7 @@ class NiftyEfieldReco:
   def get_posterior_voltage_waveforms(self, percentiles=None):
     samples = np.zeros((len(self.__posterior_samples), 2, self.__n_samples, self.__waveforms.shape[1]))
     for i_sample, sample in enumerate(self.__posterior_samples): 
-      samples[i_sample] = self.__model.get_voltage_trace(sample)
+      samples[i_sample] = self.__model.get_voltage_trace(sample) / self.__rescaling_factor
     samples = np.transpose(samples, (0, 1, 3, 2))
     if percentiles is None:
       return samples
@@ -239,7 +246,7 @@ class NiftyEfieldReco:
   def get_posterior_efield_spectrum(self, percentiles=None):
     samples = np.zeros((len(self.__posterior_samples), self.__n_freqs), dtype=complex)
     for i_sample, sample in enumerate(self.__posterior_samples):
-      samples[i_sample] = self.__model.get_efield_spectrum(sample)
+      samples[i_sample] = self.__model.get_efield_spectrum(sample) / self.__rescaling_factor
     if percentiles is None:
       return samples
     else:
@@ -253,7 +260,7 @@ class NiftyEfieldReco:
   def get_rec_power_spectrum(self, percentiles=None):
     samples = np.zeros((len(self.__posterior_samples), len(self.get_model_k_vectors())))
     for i_sample, sample in enumerate(self.__posterior_samples):
-      samples[i_sample] = self.__model.get_power_spectrum(sample)
+      samples[i_sample] = self.__model.get_power_spectrum(sample) / self.__rescaling_factor
     if percentiles is None:
       return samples
     else:
@@ -267,3 +274,9 @@ class NiftyEfieldReco:
     for i_sample, sample in enumerate(self.__posterior_samples):
       times[i_sample] = self.__model.get_time(sample)
     return times
+
+  def get_model(self):
+    return self.__model
+
+  def get_posterior_samples(self):
+    return self.__posterior_samples

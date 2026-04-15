@@ -22,6 +22,7 @@ class SignalModel(jft.Model):
     self.__n_samples = n_samples
     self.__n_padding = n_padding
     self.__n_samples_spec = n_samples // 2 + 1
+    print('Model:', self.__n_samples, sampling_rate)
     self.__freqs = jnp.fft.rfftfreq(self.__n_samples, 1./sampling_rate)
     self.__cfm = jft.CorrelatedFieldMaker('_')
     self.__correlated_field_args = copy.copy(correlated_field_args)

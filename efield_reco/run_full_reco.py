@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.signal
 import Nu_Flavor.helpers.data_reader
 import Nu_Flavor.helpers.antenna_helper
 import Nu_Flavor.efield_reco.efield_reconstructor
@@ -15,27 +16,31 @@ parser.add_argument('subfolder', type=str)
 parser.add_argument('--event_id', type=int, default=-1)
 args = parser.parse_args()
 
+upsampling_factor = 2
 reader = Nu_Flavor.helpers.data_reader.DataReader(
   args.filename,
   None,
   1
 )
+model_params = {
+  "offset_mean": (-4.),
+  "offset_std": (1., 5e-1),
+  "fluctuations": (.5, .5),
+  "loglogavgslope": (-2.8, 0.3),
+  "flexibility": (.3, .5),
+  "asperity": (.1, .5)
+}
 antenna_helper = Nu_Flavor.helpers.antenna_helper.AntennaHelper()
 efield_reconstructor = Nu_Flavor.efield_reco.efield_reconstructor.NiftyEfieldReco(
   n_samples=256,
   sampling_rate=3.,
-  time_mean=2,
+  time_mean=4,
   time_std=.5,
-  probability_samples=200,
-  correlated_field_args={
-    "offset_mean": (-2.5),
-    "offset_std": (.5, 5e-1),
-    "fluctuations": (.5, 1.),
-    "loglogavgslope": (-2.3, 0.5),
-    "flexibility": (.2, 1.5),
-    "asperity": (.2, .5)
-  },
-  n_repeats=10
+  probability_samples=100,
+  correlated_field_args=model_params,
+  n_repeats=3,
+  n_padding=256+128,
+  upsampling_factor=upsampling_factor
 )
 for i_event in range(reader.get_n_events()):
   print("reconstructing event ", i_event)
@@ -94,7 +99,7 @@ for i_event in range(reader.get_n_events()):
     signal_direction
   )
   fig2, ax2 = plt.subplots(prep_waveforms.shape[1], 5, figsize=(30,3*prep_waveforms.shape[1]))
-  for i_sample in range(10):
+  for i_sample in range(5):
     prior_sample = efield_reconstructor.generate_prior_sample()
     efield_prior = efield_reconstructor.generate_efield_prior()
     prior_spec = np.abs(np.fft.rfft(efield_prior))
@@ -121,6 +126,8 @@ for i_event in range(reader.get_n_events()):
         color='C{}'.format(i_sample)
       )
   for i_ant in range(prep_waveforms.shape[1]):
+    ax2[i_ant, 2].set_xlim([0, 150])
+    # ax2[i_ant, 4].set_xlim([0, 1500])
     for i_pol in range(2):
       ax2[i_ant, i_pol].plot(
         times,
@@ -135,8 +142,8 @@ for i_event in range(reader.get_n_events()):
         alpha=.5
       )
       wf_max = np.max(np.abs(prep_waveforms))
-      ax2[i_ant, i_pol].set_ylim([-wf_max, wf_max])
-      ax2[i_ant, i_pol].set_xlim([0, 20])
+    ax2[i_ant, i_pol].set_ylim([-wf_max*2, wf_max*2])
+      #ax2[i_ant, i_pol].set_xlim([0, 20])
     for i_plot in range(5):
       ax2[i_ant, i_plot].grid()
     ax2[i_ant, 4].set_yscale('log')
@@ -168,6 +175,7 @@ for i_event in range(reader.get_n_events()):
         alpha=.5,
         marker='.'
       )
+      ax3[i_ant, i_pol+2].set_xlim([0, 1.5])
       ax3[i_ant, i_pol].grid()
       ax3[i_ant, i_pol+2].grid()
       ax3[i_ant, i_pol].plot(
@@ -241,6 +249,7 @@ for i_event in range(reader.get_n_events()):
   fig4, ax4 = plt.subplots(1, 3, figsize=(16, 8))
   rec_efield_spec = efield_reconstructor.get_rec_efield_spectrum()
   efield_spec_posterior = efield_reconstructor.get_posterior_efield_spectrum([16, 84])
+  efield_spec_samples = efield_reconstructor.get_posterior_efield_spectrum()
   sim_efield_data = reader.get_efields()
   sim_efields = np.zeros((sim_efield_data.shape[0], 256))
   for i_efield in range(sim_efields.shape[0]):
@@ -256,14 +265,14 @@ for i_event in range(reader.get_n_events()):
   model_k_vectors = efield_reconstructor.get_model_k_vectors()
   efield_max = np.zeros(sim_efields.shape[0])
   for i_efield in range(sim_efields.shape[0]):
-    efield_spec = np.abs(np.fft.rfft(sim_efields[i_efield]))
+    efield_spec = np.abs(np.fft.rfft(sim_efields[i_efield])) / upsampling_factor**3
     ax4[0].plot(
       efield_freqs,
       efield_spec,
       color='C1'
     )
+    ax4[0].set_ylim([0, 1.2 * np.max(efield_spec)])
     efield_max[i_efield] = np.max(efield_spec)
-  ax4[0].set_ylim([0, 1.2 * np.max(efield_spec)])
   ax4[0].set_xlabel('f [GHz]')
   ax4[0].set_ylabel('E')
   ax4[0].fill_between(
@@ -279,6 +288,13 @@ for i_event in range(reader.get_n_events()):
     color='C2',
     linestyle='--'
   )
+  for i_spec in range(min(len(efield_spec_samples), 30)):
+    ax4[0].plot(
+      freqs,
+      np.abs(efield_spec_samples[i_spec]),
+      alpha=.1,
+      color='k'
+    )
   ax4[0].grid()
   ax4[0].axvline(
     .3,
@@ -292,6 +308,7 @@ for i_event in range(reader.get_n_events()):
     alpha=.5,
     linestyle=':'
   )
+  ax4[0].set_xlim([0, 1.5])
   power_spectrum_fit = np.polynomial.polynomial.Polynomial.fit(
     np.log10(model_k_vectors[1:]),
     np.log10(rec_power_spectrum[4, 1:]),
@@ -305,10 +322,10 @@ for i_event in range(reader.get_n_events()):
       color='k',
       alpha=.2
     )
-  for i_sample, sample in enumerate(power_spectrum_samples):
+  for i_sample in range(min(30, len(power_spectrum_samples))):
     ax4[1].plot(
       model_k_vectors,
-      sample,
+      power_spectrum_samples[i_sample],
       color='C0',
       alpha=.05
     )
@@ -343,3 +360,83 @@ for i_event in range(reader.get_n_events()):
   results_dic = {'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]]}
   with open('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}/results{}'.format(args.subfolder, run, i_event), 'w') as outfile:
     json.dump(results_dic, outfile)
+  fig5 = plt.figure(figsize=(16, 8))
+  ax5_1 = fig5.add_subplot(1, 3, 1)
+  ax5_2 = fig5.add_subplot(1, 3, 2)
+  ax5_3 = fig5.add_subplot(3, 6, 5)
+  ax5_4 = fig5.add_subplot(3, 6, 6)
+  ax5_5 = fig5.add_subplot(3, 6, 11)
+  ax5_6 = fig5.add_subplot(3, 6, 12)
+  ax5_7 = fig5.add_subplot(3, 6, 17)
+  ax5_8 = fig5.add_subplot(3, 6, 18)
+  model = efield_reconstructor.get_model()
+  posterior_samples = efield_reconstructor.get_posterior_samples()
+  rec_parameters = np.zeros((6, len(posterior_samples)))
+  
+  for i_sample, sample in enumerate(posterior_samples):
+    full_efield = model.get_full_abs_efield_spectrum(sample)
+    full_freqs = np.arange(len(full_efield)) * (freqs[1] - freqs[0])
+    if i_sample <30:
+      ax5_1.plot(
+        full_freqs,
+        full_efield,
+        color='k',
+        alpha=.1
+      )
+      ax5_2.plot(
+        model_k_vectors,
+        power_spectrum_samples[i_sample],
+        color='k',
+        alpha=.1
+      )
+    rec_parameters[0, i_sample] = np.exp(sample._tree['_asperity'] * model_params['asperity'][1] + model_params['asperity'][0])
+    rec_parameters[1, i_sample] = np.exp(sample._tree['_flexibility'] * model_params['flexibility'][1] + model_params['flexibility'][0])
+    rec_parameters[2, i_sample] = np.exp(sample._tree['_fluctuations'] * model_params['fluctuations'][1] + model_params['fluctuations'][0])
+    rec_parameters[3, i_sample] = sample._tree['_loglogavgslope'] * model_params['loglogavgslope'][1] + model_params['loglogavgslope'][0]
+    #rec_parameters[4, i_sample] = sample._tree['_offset_mean'] * model_params['offset_mean'][1] + model_params['offset_mean'][0]
+    #rec_parameters[5, i_sample] = sample._tree['_offset_std'] * model_params['offset_std'][1] + model_params['offset_std'][0]
+  ax5_3.hist(
+    rec_parameters[0],
+    bins=25
+  )
+  ax5_4.hist(
+    rec_parameters[1],
+    bins=25
+  )
+  ax5_5.hist(
+    rec_parameters[2],
+    bins=25
+  )
+  ax5_6.hist(
+    rec_parameters[3],
+    bins=25
+  )
+  ax5_7.hist(
+    rec_parameters[4],
+    bins=25
+  )
+  ax5_8.hist(
+    rec_parameters[5],
+    bins=25
+  )
+  ax5_1.grid()
+  ax5_2.grid()
+  ax5_3.grid()
+  ax5_4.grid()
+  ax5_5.grid()
+  ax5_6.grid()
+  ax5_7.grid()
+  ax5_8.grid()
+  ax5_2.set_xscale('log')
+  ax5_2.set_yscale('log')
+  ax5_3.set_title('asperity')
+  ax5_4.set_title('flexibility')
+  ax5_5.set_title('fluctuations')
+  ax5_6.set_title('loglogavgslope')
+  ax5_7.set_title('offset_mean')
+  ax5_8.set_title('offset_std')
+  fig5.tight_layout()
+  if not os.path.exists('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}'.format(args.subfolder, run)):
+    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}'.format(args.subfolder, run))
+
+  fig5.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}/rec_stats{}.png'.format(args.subfolder, run, i_event))

@@ -33,13 +33,21 @@ class AntennaHelper:
     self.__antenna_boresights[:, 0] = np.cos(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
     self.__antenna_boresights[:, 1] = np.sin(position_data[:, 6]*degrad) * np.cos(position_data[:, 5]*degrad)
     self.__antenna_boresights[:, 2] = np.sin(position_data[:, 5]*degrad)
+    self.__antenna_eplanes = np.zeros_like(self.__antenna_boresights)
+    self.__antenna_eplanes[:, 0] = -np.sin(position_data[:, 6]*degrad)
+    self.__antenna_eplanes[:, 1] = np.cos(position_data[:, 6]*degrad)
+    self.__antenna_hplanes = np.zeros_like(self.__antenna_eplanes)
+    for i_ant in range(self.__antenna_hplanes.shape[0]):
+      self.__antenna_hplanes[i_ant] = np.cross(self.__antenna_boresights[i_ant], self.__antenna_eplanes[i_ant])
     ###### Signal Chain Response ######
     amp_response_data = np.genfromtxt(
       pueosim_dir + '/share/pueo/responses/signalChainMI/PUEO_SignalChainMI_0.csv',
       delimiter=','
     )
     self.__amp_response = amp_response_data[:, 1] * np.exp(1.j * amp_response_data[:, 2])
-    
+    self.__amp_response = np.fft.irfft(self.__amp_response)
+    self.__amp_response = scipy.signal.resample(self.__amp_response, self.__amp_response.shape[0] * self.__upsampling_factor)
+    self.__amp_response = np.fft.rfft(self.__amp_response)
 
   def __read_boresight_response(
       self,
@@ -131,6 +139,31 @@ class AntennaHelper:
       return response * np.exp(-2.j * np.pi * dt * freqs)
     else:
       return response
+  
+  def get_polarization_decomposition(
+      self,
+      signal_direction: np.array,
+      antenna_index: int
+  ):
+      """
+      [[H->H], [V->H]]
+      [[H->V], [V->V]]
+      """
+      pol_com = np.zeros((2, 2))
+      signal_hpol = np.cross(signal_direction, np.array([0, 0, 1]))
+      signal_hpol /= np.sqrt(np.sum(signal_hpol**2))
+      signal_vpol = np.cross(signal_direction, signal_hpol)
+      signal_vpol /= np.sqrt(np.sum(signal_vpol**2))
+      ant_h = np.cross(self.__antenna_hplanes[antenna_index], signal_direction)
+      ant_h /= np.sqrt(np.sum(ant_h**2))
+      ant_v = np.cross(ant_h, signal_direction)
+      ant_v /= np.sqrt(np.sum(ant_v**2))
+      #print('ant v: ', ant_v, 'ant h: ', ant_h, self.__antenna_hplanes[antenna_index])
+      pol_com[0, 0] = np.dot(signal_hpol, ant_h)
+      pol_com[0, 1] = -np.dot(signal_vpol, ant_h)
+      pol_com[1, 0] = -np.dot(signal_hpol, ant_v)
+      pol_com[1, 1] = np.dot(signal_vpol, ant_v)
+      return pol_com
   def get_signal_travel_time(
       self,
       signal_direction,
