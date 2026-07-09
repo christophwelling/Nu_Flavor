@@ -103,12 +103,12 @@ def plot_correlation(
     alpha=.5
     )  
   ax2[2].grid()
-  ax2[3].plot(
-    times,
-    (np.sum(np.sum(correlation, axis=0), axis=0)),
-    color='C0',
-    alpha=.5
-  )
+  # ax2[3].plot(
+  #   times,
+  #   (np.sum(np.sum(correlation, axis=0), axis=0)),
+  #   color='C0',
+  #   alpha=.5
+  # )
   ax2[3].plot(
     times,
     np.abs(scipy.signal.hilbert(np.sum(np.sum(correlation, axis=0), axis=0))),
@@ -136,6 +136,13 @@ def plot_correlation(
         color='C{}'.format(i_peak%6),
         alpha=.1
       )
+  ax2[3].set_yscale('log')
+  ax2[3].set_ylim([.1, None])
+  ax2[3].axhline(
+    np.mean((np.abs(scipy.signal.hilbert(np.sum(np.sum(correlation, axis=0), axis=0))))[peak[0]:peak[1]+1]),
+    color='k',
+    linestyle=':'
+  )
   ax2[3].grid()
   ax2[4].plot(
     times,
