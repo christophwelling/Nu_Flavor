@@ -80,7 +80,6 @@ class NiftyEfieldReco:
       for i_channel in range(waveforms.shape[1]):
         wfs_upsampled[i_pol, i_channel] = scipy.signal.resample(waveforms[i_pol, i_channel], wfs_upsampled.shape[2])
     corrs = np.zeros((wfs_upsampled.shape[1], wfs_upsampled.shape[2]+self.__template.shape[0]-1))
-    i_target = np.argmin(self.__times-pulse_time) - self.__i_template_max
     i_offsets = np.round(time_offsets * self.__sampling_rate).astype(int)
     i_offsets -= np.min(i_offsets)
     for i_channel in range(waveforms.shape[1]):
@@ -99,9 +98,9 @@ class NiftyEfieldReco:
       wf_noiseless = np.zeros_like(wfs)
     for i_channel in range(waveforms.shape[1]):
       for i_pol in range(2):
-        wfs[i_pol, i_channel] = np.roll(wfs_upsampled[i_pol, i_channel], -corr_shift-i_offsets[i_channel])
+        wfs[i_pol, i_channel] = np.roll(wfs_upsampled[i_pol, i_channel], -corr_shift-i_offsets[i_channel] + int(pulse_time * self.__sampling_rate))
         if noiseless_waveforms is not None:
-          wf_noiseless[i_pol, i_channel] = np.roll(scipy.signal.resample(noiseless_waveforms[i_pol, i_channel], wf_noiseless.shape[2]), -corr_shift-i_offsets[i_channel])
+          wf_noiseless[i_pol, i_channel] = np.roll(scipy.signal.resample(noiseless_waveforms[i_pol, i_channel], wf_noiseless.shape[2]), -corr_shift-i_offsets[i_channel] + int(pulse_time * self.__sampling_rate))
     self.__waveforms = wfs[:, :, :self.__n_samples]
     self.__noiseless_waveforms = wf_noiseless[:, :, :self.__n_samples]
     self.__actual_noise_covariance = np.matrix(self.__noise_covariance_data[0, :self.__n_samples, :self.__n_samples])
@@ -162,7 +161,8 @@ class NiftyEfieldReco:
       self.__time_std,
       self.__n_padding,
       np.transpose(self.__det_response, (0, 2, 1)),
-      pol_projections
+      pol_projections,
+      double_pulse=True
     )
 
   def generate_prior_sample(

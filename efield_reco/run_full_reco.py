@@ -23,10 +23,10 @@ reader = Nu_Flavor.helpers.data_reader.DataReader(
   1
 )
 model_params = {
-  "offset_mean": (-4.),
+  "offset_mean": (-4.5),
   "offset_std": (1., 5e-1),
   "fluctuations": (.5, .5),
-  "loglogavgslope": (-2.8, 0.3),
+  "loglogavgslope": (-3.0, 0.4),
   "flexibility": (.3, .5),
   "asperity": (.1, .5)
 }
@@ -34,11 +34,11 @@ antenna_helper = Nu_Flavor.helpers.antenna_helper.AntennaHelper()
 efield_reconstructor = Nu_Flavor.efield_reco.efield_reconstructor.NiftyEfieldReco(
   n_samples=256,
   sampling_rate=3.,
-  time_mean=4,
-  time_std=.5,
-  probability_samples=100,
+  time_mean=29,
+  time_std=2.,
+  probability_samples=500,
   correlated_field_args=model_params,
-  n_repeats=3,
+  n_repeats=8,
   n_padding=256+128,
   upsampling_factor=upsampling_factor
 )
@@ -51,7 +51,7 @@ for i_event in range(reader.get_n_events()):
   signal_direction = reader.get_signal_direction()
   antenna_indices = antenna_helper.get_antenna_indices(
     signal_direction,
-    45. * np.pi / 180.
+    40. * np.pi / 180.
   )
   waveforms = np.zeros((2, len(antenna_indices), 2048))
   waveforms_noiseless = np.zeros_like(waveforms)
@@ -91,9 +91,9 @@ for i_event in range(reader.get_n_events()):
       )
       ax1[i_ant, i_pol].grid()
   fig1.tight_layout()
-  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run)):
-    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run))
-  fig1.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}/waveforms_{}.png'.format(args.subfolder, run, i_event))
+  #if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run)):
+  #  os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}'.format(args.subfolder, run))
+  #fig1.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/prep_waveforms/run{}/waveforms_{}.png'.format(args.subfolder, run, i_event))
   efield_reconstructor.build_model(
     antenna_indices,
     signal_direction
@@ -148,9 +148,12 @@ for i_event in range(reader.get_n_events()):
       ax2[i_ant, i_plot].grid()
     ax2[i_ant, 4].set_yscale('log')
   fig2.tight_layout()
-  if not os.path.exists('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run)):
-    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run))
-  fig2.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/priors_{}.png'.format(args.subfolder, run, i_event))
+  #if not os.path.exists('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run)):
+  #  os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/'.format(args.subfolder, run))
+  #fig2.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/priors/run{}/priors_{}.png'.format(args.subfolder, run, i_event))
+  if not os.path.exists('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}/'.format(args.subfolder, run)):
+    os.makedirs('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}/'.format(args.subfolder, run))
+  fig2.savefig('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}/priors_{}.png'.format(args.subfolder, run, i_event))
 
   efield_reconstructor.run_reco()
   fig3, ax3 = plt.subplots(prep_waveforms.shape[1], 4, figsize=(24, 3*prep_waveforms.shape[1]))
@@ -241,12 +244,15 @@ for i_event in range(reader.get_n_events()):
         linestyle='--'
       )
   fig3.tight_layout()
-  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run)):
-    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run))
-
-  fig3.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(args.subfolder, run, i_event))
+  # if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run)):
+  #   os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run))
+  # fig3.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(args.subfolder, run, i_event))
+  if not os.path.isdir('/home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run)):
+    os.makedirs('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}'.format(args.subfolder, run))
+  fig3.savefig('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_result_{}.png'.format(args.subfolder, run, i_event))
 
   fig4, ax4 = plt.subplots(1, 3, figsize=(16, 8))
+  ax4[2].set_axis_off()
   rec_efield_spec = efield_reconstructor.get_rec_efield_spectrum()
   efield_spec_posterior = efield_reconstructor.get_posterior_efield_spectrum([16, 84])
   efield_spec_samples = efield_reconstructor.get_posterior_efield_spectrum()
@@ -309,11 +315,6 @@ for i_event in range(reader.get_n_events()):
     linestyle=':'
   )
   ax4[0].set_xlim([0, 1.5])
-  power_spectrum_fit = np.polynomial.polynomial.Polynomial.fit(
-    np.log10(model_k_vectors[1:]),
-    np.log10(rec_power_spectrum[4, 1:]),
-    1
-  )
   for i_range in range(2):
     ax4[1].fill_between(
       model_k_vectors,
@@ -335,40 +336,18 @@ for i_event in range(reader.get_n_events()):
     color='C2',
     linestyle='--'
   )
-  ax4[1].plot(
-    model_k_vectors,
-    np.power(10, power_spectrum_fit(np.log10(model_k_vectors))),
-    color='r',
-    linestyle=':',
-    alpha=.5
-  )
   ax4[1].grid()
   ax4[1].set_xscale('log')
   ax4[1].set_yscale('log')
   ax4[1].set_ylim([1.e-10, 1.e7])
   posterior_times = efield_reconstructor.get_posterior_times()
-  ax4[2].hist(
-    posterior_times,
-    bins = np.arange(np.min(posterior_times)-.2, np.max(posterior_times)+.2, .1)
-  )
-  ax4[2].grid()
-  ax4[2].set_xlabel('t [ns]')
-  fig4.tight_layout()
-  fig4.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(args.subfolder, run, i_event))
-  if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run)):
-    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run))
-  results_dic = {'power_spectrum_fit': [power_spectrum_fit.coef[0], power_spectrum_fit.coef[1]]}
-  with open('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}/results{}'.format(args.subfolder, run, i_event), 'w') as outfile:
-    json.dump(results_dic, outfile)
-  fig5 = plt.figure(figsize=(16, 8))
-  ax5_1 = fig5.add_subplot(1, 3, 1)
-  ax5_2 = fig5.add_subplot(1, 3, 2)
-  ax5_3 = fig5.add_subplot(3, 6, 5)
-  ax5_4 = fig5.add_subplot(3, 6, 6)
-  ax5_5 = fig5.add_subplot(3, 6, 11)
-  ax5_6 = fig5.add_subplot(3, 6, 12)
-  ax5_7 = fig5.add_subplot(3, 6, 17)
-  ax5_8 = fig5.add_subplot(3, 6, 18)
+  ax5_1 = fig4.add_subplot(3, 6, 5)
+  ax5_2 = fig4.add_subplot(3, 6, 5)
+  ax5_3 = fig4.add_subplot(3, 6, 6)
+  ax5_4 = fig4.add_subplot(3, 6, 11)
+  ax5_5 = fig4.add_subplot(3, 6, 12)
+  ax5_6 = fig4.add_subplot(3, 6, 17)
+  
   model = efield_reconstructor.get_model()
   posterior_samples = efield_reconstructor.get_posterior_samples()
   rec_parameters = np.zeros((6, len(posterior_samples)))
@@ -393,10 +372,8 @@ for i_event in range(reader.get_n_events()):
     rec_parameters[1, i_sample] = np.exp(sample._tree['_flexibility'] * model_params['flexibility'][1] + model_params['flexibility'][0])
     rec_parameters[2, i_sample] = np.exp(sample._tree['_fluctuations'] * model_params['fluctuations'][1] + model_params['fluctuations'][0])
     rec_parameters[3, i_sample] = sample._tree['_loglogavgslope'] * model_params['loglogavgslope'][1] + model_params['loglogavgslope'][0]
-    #rec_parameters[4, i_sample] = sample._tree['_offset_mean'] * model_params['offset_mean'][1] + model_params['offset_mean'][0]
-    #rec_parameters[5, i_sample] = sample._tree['_offset_std'] * model_params['offset_std'][1] + model_params['offset_std'][0]
   ax5_3.hist(
-    rec_parameters[0],
+    posterior_times,
     bins=25
   )
   ax5_4.hist(
@@ -411,32 +388,31 @@ for i_event in range(reader.get_n_events()):
     rec_parameters[3],
     bins=25
   )
-  ax5_7.hist(
-    rec_parameters[4],
-    bins=25
-  )
-  ax5_8.hist(
-    rec_parameters[5],
-    bins=25
-  )
   ax5_1.grid()
   ax5_2.grid()
   ax5_3.grid()
   ax5_4.grid()
   ax5_5.grid()
   ax5_6.grid()
-  ax5_7.grid()
-  ax5_8.grid()
   ax5_2.set_xscale('log')
   ax5_2.set_yscale('log')
-  ax5_3.set_title('asperity')
+  ax5_3.set_title('signal time')
   ax5_4.set_title('flexibility')
   ax5_5.set_title('fluctuations')
   ax5_6.set_title('loglogavgslope')
-  ax5_7.set_title('offset_mean')
-  ax5_8.set_title('offset_std')
-  fig5.tight_layout()
-  if not os.path.exists('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}'.format(args.subfolder, run)):
-    os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}'.format(args.subfolder, run))
-
-  fig5.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/debug/run{}/rec_stats{}.png'.format(args.subfolder, run, i_event))
+  fig4.tight_layout()
+  # fig4.savefig('/project/avieregg/welling/pueo/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(args.subfolder, run, i_event))
+  fig4.savefig('//home/christophwelling/RadioNeutrino/pueo/efield_reco/plots/efield_reco/{}/plots/full_reco/rec_results/run{}/rec_efield_{}.png'.format(args.subfolder, run, i_event))
+  # if not os.path.isdir('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run)):
+  #   os.makedirs('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}'.format(args.subfolder, run))
+  # results_dic = {
+  #   'asperity': list(rec_parameters[0]),
+  #   'flexibility': list(rec_parameters[1]),
+  #   'fluctuations': list(rec_parameters[2]),
+  #   'loglogavgslope': list(rec_parameters[3]),
+  #   'pulse_time': list(posterior_times),
+  #   'max_signal': np.max(np.abs(posterior_v_trace))
+  #   }
+  # with open('/project/avieregg/welling/pueo/efield_reco/{}/results/rec_results/run{}/results{}'.format(args.subfolder, run, i_event), 'w') as outfile:
+  #   json.dump(results_dic, outfile)
+  
