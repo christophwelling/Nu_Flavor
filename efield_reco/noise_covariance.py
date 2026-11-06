@@ -6,7 +6,8 @@ import argparse
 import pickle
 import sklearn.covariance
 import scipy.linalg
-
+import matplotlib
+#matplotlib.use('agg')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', type=str)
@@ -34,7 +35,7 @@ for i_event in range(n_events):
         i_channel,
         i_pol
       )
-
+print(np.max(waveforms))
 fig1, ax1 = plt.subplots(3, 2, figsize=(18, 16))
 covariance = np.zeros((4, 256, 256))
 
@@ -44,6 +45,7 @@ for i_pol in range(2):
   cov_model.fit(reshaped_array)
   covariance[i_pol] = cov_model.covariance_
   covariance[i_pol+2] = cov_model.precision_
+
 sqrt_inv_covariance = scipy.linalg.sqrtm(covariance[3])
 corr_max = np.max(np.abs(covariance[0]))
 inv_corr_max = np.max(np.abs(covariance[2]))
@@ -93,8 +95,8 @@ cplot6 = ax1[2, 1].pcolormesh(
 plt.colorbar(cplot6, ax=ax1[2,1])
 fig1.tight_layout()
 fig1.savefig('plots/covariance_matrix.png')
-# with open('noise_covariance.pkl', 'wb') as output_file:
-#   pickle.dump(covariance, output_file)
+with open('noise_covariance.pkl', 'wb') as output_file:
+  pickle.dump(covariance, output_file)
 fig2, ax2 = plt.subplots(2, 1, figsize=(9, 16))
 xx = np.arange(covariance.shape[1])
 for i_shift in range(100):

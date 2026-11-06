@@ -7,7 +7,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('flavor', type=str)
 args = parser.parse_args()
-results_folders = glob.glob('/home/welling/RadioNeutrino/data/pueo/flavor/found_pulses_old/{}/*'.format(args.flavor))
+results_folders = glob.glob('/project/avieregg/welling/pueo/flavor/found_pulses/{}/*'.format(args.flavor))
 
 fontsize=12
 thresholds = np.array([.01, 1.e-3])
@@ -72,7 +72,7 @@ for i in range(n_thresholds):
 #   marker='o'
 # )
 
-ax1_1.set_ylim([-.01, .65])
+ax1_1.set_ylim([-.01, .15])
 ax1_1.legend(ncols=3, fontsize=fontsize)
 ax1_1.grid()
 ax1_1.set_xlabel(r'$log_{10}(E_\nu/eV)$', fontsize=fontsize)
